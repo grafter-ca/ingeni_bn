@@ -8,7 +8,7 @@ const Button = ({
   iconPosition = "right",
   onClick,
 }: ButtonProps) => {
-  const base = "font-poppins font-medium px-6 py-4 text-sm uppercase tracking-widest transition-colors rounded-lg cursor-pointer";
+  const base = "font-poppins font-medium px-4 py-3 text-sm uppercase tracking-widest transition-colors rounded-lg cursor-pointer";
 
   const styles = {
     primary: "bg-gray-900 text-white hover:bg-gray-700",
