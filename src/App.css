@@ -18,7 +18,7 @@
   margin-top: 10px;
 }
 
-.Register form label::after {
+.form-label::after {
     content: "*";
     color: green;
     font-weight: 900;

@@ -1,4 +1,5 @@
 // components/CountrySelect.tsx
+import Select from "react-select";
 import { getData } from "country-list";
 
 type CountrySelectProps = {
@@ -8,41 +9,53 @@ type CountrySelectProps = {
   error?: string;
 };
 
-const CountrySelect = ({
-  value,
-  onChange,
-  label = "Country",
-  error,
-}: CountrySelectProps) => {
-  
-    const countries  = getData();
+const CountrySelect = ({ value, onChange, label = "Country", error }: CountrySelectProps) => {
+  const options = getData().map((c) => ({
+    value: c.code,
+    label: c.name,
+  }));
+
+  const selected = options.find((o) => o.value === value) ?? null;
 
   return (
-    <div  className="flex flex-col gap-1 w-full max-w-xs">
-      
-      {/* Label */}
+    <div className="flex flex-col gap-1 w-full mb-4">
+
       {label && (
-        <label className="font-poppins text-sm font-medium text-white uppercase tracking-widest">
+        <label className="font-poppins text-sm font-medium text-white capitalize tracking-widest">
           {label}
         </label>
       )}
 
-      {/* Select */}
-      <select
-        value={value}
-        onChange={(e) => onChange?.(e.target.value)}
-        className={`rounded bg-transparent font-poppins w-full px-4 py-3 border text-gray-900 border-gray-300 focus:border-gray-900 focus:outline-none transition-colors
-          ${error ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-gray-900"}`}
-      >
-        <option value="">Select a country</option>
-        {countries.map((country) => (
-          <option key={country.code} className="max-w-40" value={country.name}>
-            {country.name}
-          </option>
-        ))}
-      </select>
+      <Select
+        options={options}
+        value={selected}
+        onChange={(option) => onChange?.(option?.value ?? "")}
+        placeholder="Select a country"
+        styles={{
+          control: (base) => ({
+            ...base,
+            fontFamily: "Poppins, sans-serif",
+            borderColor: error ? "#ef4444" : "#d1d5db",
+            boxShadow: "none",
+            "&:hover": { borderColor: error ? "#ef4444" : "#111827" },
+          }),
+          menu: (base) => ({
+            ...base,
+            width: "100%",       // ✅ dropdown matches input width
+            fontFamily: "Poppins, sans-serif",
+            fontSize: "0.875rem",
+          }),
+          option: (base, state) => ({
+            ...base,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",   // ✅ long names get truncated
+            backgroundColor: state.isSelected ? "transparent" : state.isFocused ? "#f3f4f6" : "white",
+            color: state.isSelected ? "white" : "#111827",
+          }),
+        }}
+      />
 
-      {/* Error */}
       {error && (
         <p className="font-poppins text-xs text-red-500">{error}</p>
       )}
