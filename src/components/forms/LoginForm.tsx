@@ -14,7 +14,7 @@ interface LoginFormProps {
 
 export default function LoginForm({handleSubmit, handleChange,error,formData,loading}: LoginFormProps) {
   return (
-    <form className="flex flex-col gap-2 mt-4 w-full px-6" onSubmit={handleSubmit}>
+    <form className="flex flex-col max-w-md gap-2 my-4 w-full px-6" onSubmit={handleSubmit}>
 
         {/* Dynamic fields */}
         {LoginFields.map((field) => (
@@ -30,7 +30,7 @@ export default function LoginForm({handleSubmit, handleChange,error,formData,loa
         {/* Error message */}
         {error && <p className="font-poppins text-xs text-red-500">{error}</p>}
 
-        <Button label={loading ? "Logging in..." : "Login"} className="hover:bg-gray-800 hover:shadow shadow-gray-700 transition-all duration-700" />
+        <Button disabled={loading} label={loading ? "Logging in..." : "Login"} className="hover:bg-gray-800 hover:shadow shadow-gray-700 transition-all duration-700" />
       </form>
   )
 }

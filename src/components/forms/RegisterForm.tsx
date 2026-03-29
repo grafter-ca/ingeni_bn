@@ -11,12 +11,13 @@ interface RegisterFormProps {
     error: string | null;
     formData: RegisterProps;
     loading?: boolean;
+    confirmPassword: string;
+    setConfirmPassword: React.Dispatch<React.SetStateAction<string>>;
 }
 
-export default function RegisterForm({handleSubmit, handleChange,error,formData,loading}: RegisterFormProps) {
-      const [confirmPassword, setConfirmPassword] = React.useState<string>("");
-  return (
-    <form className="flex flex-col gap-2 mt-4 max-w-sm mx-auto w-full px-4" onSubmit={handleSubmit}>
+export default function RegisterForm({handleSubmit, handleChange,error,formData,loading,confirmPassword,setConfirmPassword}: RegisterFormProps) {
+   return(
+    <form className="flex flex-col gap-2 mt-4 max-w-md mx-auto w-full px-4" onSubmit={handleSubmit}>
 
         {/* Dynamic fields */}
         {RegisterFields.map((field) => (
@@ -27,6 +28,7 @@ export default function RegisterForm({handleSubmit, handleChange,error,formData,
             placeholder={field.placeholder}
             onChange={(value) => handleChange(field.field, value)}
             value={formData[field.field] ?? ""}
+            error={error ?.includes(field.field) ? error : " " }
           />
         ))}
 
@@ -47,7 +49,7 @@ export default function RegisterForm({handleSubmit, handleChange,error,formData,
           onChange={(val) => handleChange("country", val)} // 
         />
 
-        <Button label={loading ? "Registering..." : "Register"} className="hover:bg-gray-800 hover:shadow shadow-gray-700 transition-all duration-700" />
+        <Button disabled={loading} label={loading ? "Registering..." : "Register"} className="hover:bg-gray-800 hover:shadow shadow-gray-700 transition-all duration-700" />
       </form>
-  )
+   )
 }

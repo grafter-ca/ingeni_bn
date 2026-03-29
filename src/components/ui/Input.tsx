@@ -5,7 +5,7 @@ type InputProps = {
     value?: string;
     name?: string;
     onChange?: (value: string) => void;
-    error?: string;
+    error?: string | undefined;
     className?: string;
 };
 

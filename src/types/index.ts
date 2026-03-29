@@ -6,7 +6,10 @@ export interface RegisterProps {
     phone?: string;
     password?: string;
     country?: string;
+    confirmPassword? : string;
 }
+
+
 export interface LoginProps {
     email?: string;
     password?: string;
@@ -19,6 +22,7 @@ export interface ButtonProps {
   icon?: LucideIcon;
   iconPosition?: "left" | "right";
   onClick?: () => void;
+  disabled?: boolean;
 };
 
 export interface ValueProps {
@@ -31,3 +35,33 @@ export interface ReasonProps {
   stat: string;
   label: string;
 }
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  country?: string;
+};
+
+export type CartItem = {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image?: string;
+};
+
+export type AuthState = {
+  user: User | null;
+  isLoading: boolean;
+  error: string | null;
+};
+
+export type AuthAction =
+  | { type: "LOGIN_START" }
+  | { type: "LOGIN_SUCCESS"; payload: User }
+  | { type: "LOGIN_ERROR"; payload: string }
+  | { type: "LOGOUT" }
+  | { type: "CLEAR_ERROR" };
+
+
