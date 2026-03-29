@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background-color: hsl(0, 2%, 8%); 
+  --text-color: #ffffff;
+  --pretty:hsl(48, 100%, 70%);
+  --primary-color: #1e90ff;
+  --secondary-color: hsl(48, 100%, 70%);
+  --font-family: 'Arial', 'Poppins', sans-serif;
+}
+
+.App {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: var(--font-family);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  scroll-behavior: smooth;
+}
