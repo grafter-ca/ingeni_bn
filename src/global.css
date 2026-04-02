@@ -21,3 +21,9 @@
   justify-content: center;
   scroll-behavior: smooth;
 }
+
+.admin {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: var(--font-family);
+}

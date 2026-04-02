@@ -10,7 +10,7 @@ const Cart = () => {
   const navigate = useNavigate();
   const { items } = useCartStore();
   const { handleRemoveFromCart, handleUpdateQuantity, handleClearCart } = useCartActions();
-  const { totalItems, formattedTotal } = useCartSummary();
+  const { totalItems } = useCartSummary();
 
   // useMemo — only recomputes when items change
   const subtotal = useMemo(

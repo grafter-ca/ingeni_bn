@@ -2,10 +2,13 @@ import { useState, useEffect } from "react";
 import { useAuthState } from "../../context/AuthContext";
 import AuthPromptModal from "./AuthPromptModal";
 
-type Props = { children: React.ReactNode };
+type Props = { 
+  children: React.ReactNode 
+  requiredRole?: string; // Optional prop to specify required role for access
+};
 
 // Single Responsibility: only handles auth gate logic
-const ProtectedRoute = ({ children }: Props) => {
+const ProtectedRoute = ({ children, requiredRole }: Props) => {
   const { user } = useAuthState();
   const [showModal, setShowModal] = useState(false);
 
@@ -14,7 +17,13 @@ const ProtectedRoute = ({ children }: Props) => {
   }, [user]);
 
 
-  if (user) return <>{children}</>;
+  if (user) {
+    if (requiredRole && user.role !== requiredRole) {
+      // Handle role-based access control
+      return null;
+    }
+    return <>{children}</>;
+  }
 
   return (
     <>

@@ -1,8 +1,8 @@
 import { useEffect, useCallback, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ShoppingCart, ArrowLeft, Star, Shield,
-  Truck, RefreshCw, Share2, Heart, ChevronLeft, ChevronRight,
+  ShoppingCart, ArrowLeft, Shield, Zap,
+  Truck, RefreshCw, Heart, ChevronLeft, ChevronRight, X, CheckCircle, Star
 } from "lucide-react";
 import { useCartActions } from "../../hooks/useCartActions";
 import { useAuthState } from "../../context/AuthContext";
@@ -11,7 +11,7 @@ import type { ApiProduct } from "../../types/api";
 import Button from "../../components/ui/Button";
 
 const ProductDetail = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>(); 
   const navigate = useNavigate();
   const { handleAddToCart } = useCartActions();
   const { user } = useAuthState();
@@ -23,36 +23,41 @@ const ProductDetail = () => {
   const [quantity, setQuantity]     = useState(1);
   const [added, setAdded]           = useState(false);
   const [wishlist, setWishlist]     = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
-  // useEffect — fetch product on mount
   useEffect(() => {
     if (!id) return;
     setIsLoading(true);
     productService
-      .getProduct(Number(id))
-      .then((data) => { setProduct(data); setIsLoading(false); })
-      .catch(() => { setError("Product not found"); setIsLoading(false); });
+      .getProduct(id) 
+      .then((data) => { 
+        setProduct(data); 
+        setIsLoading(false); 
+      })
+      .catch(() => { 
+        setError("Product not found"); 
+        setIsLoading(false); 
+      });
   }, [id]);
 
   const handlePrevImage = useCallback(() => {
-    setImageIndex((prev) =>
-      prev === 0 ? (product?.images.length ?? 1) - 1 : prev - 1
-    );
+    if (!product?.images) return;
+    setImageIndex((prev) => prev === 0 ? product.images.length - 1 : prev - 1);
   }, [product]);
 
   const handleNextImage = useCallback(() => {
-    setImageIndex((prev) =>
-      prev === (product?.images.length ?? 1) - 1 ? 0 : prev + 1
-    );
+    if (!product?.images) return;
+    setImageIndex((prev) => prev === product.images.length - 1 ? 0 : prev + 1);
   }, [product]);
 
   const handleAddToCartClick = useCallback(() => {
     if (!user) { navigate("/login", { state: { from: `/products/${id}` } }); return; }
     if (!product) return;
+    
     for (let i = 0; i < quantity; i++) {
       handleAddToCart({
-        id:    String(product.id),
-        name:  product.title,
+        id: String(product.id),
+        name: product.title,
         price: product.price,
         image: product.images[0],
       });
@@ -61,227 +66,161 @@ const ProductDetail = () => {
     setTimeout(() => setAdded(false), 2000);
   }, [user, product, quantity, handleAddToCart, navigate, id]);
 
-  // ── Loading ──
   if (isLoading) return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 border-2 border-white border-t-transparent rounded-full animate-spin" />
-        <p className="font-poppins text-gray-400 text-sm uppercase tracking-widest animate-pulse">
-          Loading product...
-        </p>
-      </div>
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
-  // ── Error ──
   if (error || !product) return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center gap-4">
-      <p className="font-poppins text-gray-400">{error ?? "Product not found"}</p>
-      <Button label="Go Back" icon={ArrowLeft} onClick={() => navigate("/products")} />
+    <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center gap-4">
+      <p className="text-gray-400">Product not found</p>
+      <Button label="Return to Shop" icon={ArrowLeft} onClick={() => navigate("/products")} />
     </div>
   );
 
-  const images = product.images.length > 0 ? product.images : ["/placeholder.png"];
+  const images = product.images?.length > 0 ? product.images : ["/placeholder.png"];
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white font-poppins">
-
-      {/* Breadcrumb */}
-      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-2 text-xs text-gray-500 uppercase tracking-widest">
-        <button onClick={() => navigate("/")} className="hover:text-white transition-colors">Home</button>
-        <span>/</span>
-        <button onClick={() => navigate("/products")} className="hover:text-white transition-colors">Products</button>
-        <span>/</span>
-        <span className="text-gray-300 truncate max-w-xs">{product.title}</span>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 pb-20">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-
-          {/* ── Image Gallery ── */}
-          <div className="flex flex-col gap-4">
-
-            {/* Main Image */}
-            <div className="relative bg-gray-800 aspect-square overflow-hidden group">
-              <img
-                src={images[imageIndex]}
-                alt={product.title}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.png"; }}
-              />
-
-              {/* Nav arrows */}
-              {images.length > 1 && (
-                <>
-                  <button
-                    onClick={handlePrevImage}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 bg-gray-900/70 hover:bg-gray-900 p-2 transition-colors"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <button
-                    onClick={handleNextImage}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-gray-900/70 hover:bg-gray-900 p-2 transition-colors"
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </>
-              )}
-
-              {/* Wishlist */}
-              <button
-                onClick={() => setWishlist((w) => !w)}
-                className="absolute top-3 right-3 bg-gray-900/70 hover:bg-gray-900 p-2 transition-colors"
-              >
-                <Heart
-                  size={18}
-                  className={wishlist ? "fill-red-500 text-red-500" : "text-gray-400"}
-                />
-              </button>
-
-              {/* Share */}
-              <button className="absolute top-3 left-3 bg-gray-900/70 hover:bg-gray-900 p-2 transition-colors">
-                <Share2 size={18} className="text-gray-400" />
-              </button>
-            </div>
-
-            {/* Thumbnails */}
-            {images.length > 1 && (
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                {images.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setImageIndex(i)}
-                    className={`flex-shrink-0 w-20 h-20 overflow-hidden border-2 transition-colors ${
-                      i === imageIndex ? "border-white" : "border-gray-700 hover:border-gray-500"
-                    }`}
-                  >
-                    <img
-                      src={img}
-                      alt={`${product.title} ${i + 1}`}
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.png"; }}
-                    />
-                  </button>
-                ))}
+    <div className="min-h-screen bg-[#0a0a0a] text-gray-100 font-poppins selection:bg-blue-500/30">
+      
+      {/* ── Checkout Modal (Quick Flow) ── */}
+      {isCheckoutOpen && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+          <div className="bg-[#141414] border border-white/10 w-full max-w-md p-8 rounded-2xl shadow-2xl relative">
+            <button onClick={() => setIsCheckoutOpen(false)} className="absolute top-5 right-5 text-gray-500 hover:text-white transition-colors">
+              <X size={24} />
+            </button>
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle size={32} />
               </div>
-            )}
-          </div>
-
-          {/* ── Product Info ── */}
-          <div className="flex flex-col gap-6">
-
-            {/* Category */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs uppercase tracking-widest text-gray-400 bg-gray-800 px-3 py-1">
-                {product.category.name}
-              </span>
-            </div>
-
-            {/* Title */}
-            <h1 className="font-bold text-3xl md:text-4xl text-white leading-tight">
-              {product.title}
-            </h1>
-
-            {/* Rating */}
-            <div className="flex items-center gap-2">
-              <div className="flex gap-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star
-                    key={i}
-                    size={16}
-                    className={i < 4 ? "fill-yellow-400 text-yellow-400" : "text-gray-600"}
-                  />
-                ))}
-              </div>
-              <span className="text-gray-400 text-sm">(4.0) · 128 reviews</span>
-            </div>
-
-            {/* Price */}
-            <div className="flex items-baseline gap-3">
-              <span className="font-bold text-4xl text-white">${product.price}</span>
-              <span className="text-gray-500 line-through text-lg">
-                ${(product.price * 1.2).toFixed(2)}
-              </span>
-              <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 uppercase tracking-widest">
-                20% off
-              </span>
-            </div>
-
-            {/* Description */}
-            <p className="text-gray-400 leading-relaxed text-sm border-t border-gray-800 pt-6">
-              {product.description}
-            </p>
-
-            {/* Quantity */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs uppercase tracking-widest text-gray-400">Quantity</label>
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="w-10 h-10 border border-gray-700 hover:border-white flex items-center justify-center text-white transition-colors text-lg"
-                >
-                  −
-                </button>
-                <span className="font-medium text-lg w-6 text-center">{quantity}</span>
-                <button
-                  onClick={() => setQuantity((q) => q + 1)}
-                  className="w-10 h-10 border border-gray-700 hover:border-white flex items-center justify-center text-white transition-colors text-lg"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Button
-                label={added ? "Added to Cart ✓" : "Add to Cart"}
-                icon={ShoppingCart}
-                onClick={handleAddToCartClick}
-                className={`flex-1 ${added ? "bg-green-700 hover:bg-green-700" : ""}`}
-              />
-              <Button
-                label="Buy Now"
-                variant="outline"
-                className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
-                onClick={handleAddToCartClick}
-              />
-            </div>
-
-            {/* Trust Badges */}
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-800">
-              {[
-                { icon: Truck,     label: "Free Shipping",   sub: "Orders over $50"   },
-                { icon: Shield,    label: "Secure Payment",  sub: "100% protected"     },
-                { icon: RefreshCw, label: "Easy Returns",    sub: "30-day policy"      },
-              ].map(({ icon: Icon, label, sub }) => (
-                <div key={label} className="flex flex-col items-center text-center gap-1">
-                  <Icon size={20} className="text-gray-400" />
-                  <span className="text-xs font-medium text-white">{label}</span>
-                  <span className="text-xs text-gray-500">{sub}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Product Meta */}
-            <div className="flex flex-col gap-2 pt-4 border-t border-gray-800 text-sm">
-              <div className="flex gap-2">
-                <span className="text-gray-500 w-24">Category</span>
-                <span className="text-gray-300">{product.category.name}</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-gray-500 w-24">Product ID</span>
-                <span className="text-gray-300">#{product.id}</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-gray-500 w-24">Availability</span>
-                <span className="text-green-400">In Stock</span>
-              </div>
+              <h2 className="text-2xl font-bold">Secure Checkout</h2>
+              <p className="text-gray-400 text-sm">Proceeding with {quantity}x <strong>{product.title}</strong> for ${(product.price * quantity).toFixed(2)}</p>
+              <Button label="Pay Now" onClick={() => navigate('/checkout')} className="w-full py-4 bg-blue-600 hover:bg-blue-500 mt-4" />
+              <button onClick={() => setIsCheckoutOpen(false)} className="text-xs text-gray-500 uppercase tracking-widest hover:text-white">Cancel</button>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Navigation Header */}
+      <nav className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-lg border-b border-white/5 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <button onClick={() => navigate("/products")} className="group flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-all">
+            <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+            <span>Continue Shopping</span>
+          </button>
+          <div className="flex gap-4">
+             <Heart size={20} className={`cursor-pointer transition-colors ${wishlist ? "fill-red-500 text-red-500" : "text-gray-500 hover:text-white"}`} onClick={() => setWishlist(!wishlist)} />
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-6 py-8 lg:py-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+
+          {/* ── Left: Gallery (Sticky on Desktop) ── */}
+          <div className="lg:col-span-7 space-y-4 lg:sticky lg:top-24">
+            <div className="relative aspect-square bg-[#111] overflow-hidden rounded-3xl border border-white/5 group">
+              <img
+                src={images[imageIndex]}
+                alt={product.title}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+              {images.length > 1 && (
+                <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none">
+                  <button onClick={handlePrevImage} className="pointer-events-auto p-3 bg-black/50 backdrop-blur-md rounded-full hover:bg-black transition-colors border border-white/10">
+                    <ChevronLeft size={24} />
+                  </button>
+                  <button onClick={handleNextImage} className="pointer-events-auto p-3 bg-black/50 backdrop-blur-md rounded-full hover:bg-black transition-colors border border-white/10">
+                    <ChevronRight size={24} />
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+              {images.map((img, i) => (
+                <button
+                  key={i}
+                  onClick={() => setImageIndex(i)}
+                  className={`shrink-0 w-24 h-24 rounded-xl overflow-hidden border-2 transition-all ${
+                    i === imageIndex ? "border-blue-500 scale-95" : "border-transparent opacity-40 hover:opacity-100"
+                  }`}
+                >
+                  <img src={img} alt="thumb" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Right: Conversion Terminal ── */}
+          <div className="lg:col-span-5 space-y-8">
+            <section className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="px-3 py-1 bg-blue-500/10 text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-full border border-blue-500/20">
+                  {product.category?.name || "Premium Collection"}
+                </span>
+                <div className="flex items-center gap-1 text-yellow-500 ml-auto">
+                  <Star size={14} fill="currentColor" />
+                  <span className="text-sm font-bold">4.8</span>
+                </div>
+              </div>
+              <h1 className="text-4xl lg:text-5xl font-bold tracking-tight leading-tight">{product.title}</h1>
+              <div className="flex items-baseline gap-4">
+                <span className="text-5xl font-light text-white">${product.price}</span>
+                <span className="text-gray-600 line-through text-xl">${(product.price * 1.3).toFixed(0)}</span>
+              </div>
+              <p className="text-gray-400 leading-relaxed font-light">{product.description}</p>
+            </section>
+
+            {/* Action Box */}
+            <div className="p-6 bg-[#141414] rounded-3xl border border-white/5 space-y-6 shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Select Quantity</span>
+                <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5">
+                  <button onClick={() => setQuantity(q => Math.max(1, q-1))} className="w-10 h-10 flex items-center justify-center hover:text-blue-500 transition-colors">−</button>
+                  <span className="w-10 text-center font-bold">{quantity}</span>
+                  <button onClick={() => setQuantity(q => q+1)} className="w-10 h-10 flex items-center justify-center hover:text-blue-500 transition-colors">+</button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Button
+                  label={added ? "Added to Cart" : "Add to Cart"}
+                  icon={ShoppingCart}
+                  onClick={handleAddToCartClick}
+                  className={`w-full py-4 rounded-2xl text-sm font-bold uppercase tracking-widest transition-all ${
+                    added ? "bg-green-600 border-green-600" : "bg-transparent border-white/10 hover:bg-white/5"
+                  }`}
+                />
+                <Button
+                  label="Buy It Now"
+                  icon={Zap}
+                  onClick={() => setIsCheckoutOpen(true)}
+                  className="w-full py-4 bg-blue-600 hover:bg-blue-500 border-none rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-600/20"
+                />
+              </div>
+            </div>
+
+            {/* Trust Matrix */}
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { icon: Truck, label: "Express", sub: "Fast Delivery" },
+                { icon: Shield, label: "Secure", sub: "Encrypted" },
+                { icon: RefreshCw, label: "Returns", sub: "30-Day Policy" },
+              ].map(({ icon: Icon, label, sub }) => (
+                <div key={label} className="p-4 rounded-2xl bg-white/2 border border-white/5 text-center space-y-1">
+                  <Icon size={18} className="mx-auto text-blue-500 mb-1" />
+                  <p className="text-[10px] font-bold text-white uppercase">{label}</p>
+                  <p className="text-[9px] text-gray-500 uppercase">{sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 };

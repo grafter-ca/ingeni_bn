@@ -1,110 +1,142 @@
-import React, { useCallback } from "react";
-import type { RegisterProps } from "../../types";
-import RegisterForm from "../../components/forms/RegisterForm";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import RegisterForm from "../../components/forms/RegisterForm";
 import { useAuth } from "../../context/AuthContext";
+import type { RegisterPayloadProps } from "../../types/api";
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
-  const { register, isLoading, error, clearError } = useAuth(); // ✅ real auth
+  const { register, isLoading, error, clearError, user } = useAuth();
 
-  const [formData, setFormData] = React.useState<RegisterProps>({});
-  const [localError, setLocalError] = React.useState<string | null>(null);
-  const [confirmPassword, setConfirmPassword] = React.useState<string>("");
+  // 1. Initial State
+  const [formData, setFormData] = useState<RegisterPayloadProps>({
+    name: "",
+    email: "",
+    password: "",
+    country: "",
+    phone: "", // This will be mapped to phone in the AuthProvider/Service
+  });
 
-  // Merge local validation error with API error
-  const displayError = localError ?? error;
+  const [confirmPassword, setConfirmPassword] = useState<string>("");
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  // useCallback — stable reference
+  /**
+   * SEAMLESS REDIRECT
+   * Once the user is successfully registered and logged in by Better-Auth,
+   * we redirect them to the shop or onboarding.
+   */
+  useEffect(() => {
+    if (user) {
+      switch (user.role) {
+        case "ADMIN":
+          navigate("/admin", { replace: true });
+          break;
+        case "VENDOR":
+          navigate("/vendor/inventory", { replace: true });
+          break;
+        default:
+          navigate("/products", { replace: true });
+          break;
+      }
+    }
+  }, [user, navigate]);
+
+  /**
+   * FIELD CHANGE HANDLER
+   */
   const handleChange = useCallback(
-    (field: keyof RegisterProps, value: string) => {
+    (field: keyof RegisterPayloadProps, value: string) => {
       setFormData((prev) => ({ ...prev, [field]: value }));
-      // ✅ clear both errors when user starts typing
+      
+      // Clean up errors as the user types
       if (localError) setLocalError(null);
       if (error) clearError();
     },
     [error, localError, clearError]
   );
 
+  /**
+   * FORM SUBMISSION
+   */
   const handleSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
 
-      // ✅ local validation before hitting API
-      if (!formData.name || !formData.email || !formData.password) {
-        setLocalError("Please fill in all required fields");
-        return;
-      }
-
+      // 2. Local Validations (Before hitting the API)
       if (formData.password !== confirmPassword) {
-        setLocalError("Passwords do not match");
+        setLocalError("Passwords do not match.");
         return;
       }
 
-      if (formData.password.length < 6) {
-        setLocalError("Password must be at least 6 characters");
+      if (!formData.phone || formData.phone.length < 10) {
+        setLocalError("Please enter a valid phone number.");
+        return;
+      }
+
+      if (!formData.country) {
+        setLocalError("Please select your country.");
         return;
       }
 
       setLocalError(null);
-
-      await register({
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-      }); // ✅ calls real API → auto-login → sets user in context
-
-      // Only navigate if no API error after registration
-      if (!error) {
-        setFormData({});
-        setConfirmPassword("");
-        navigate("/"); // ✅ auto-login redirects home
-      }
+      
+      // 3. Trigger the AuthContext register logic
+      // Note: AuthContext/AuthService will map 'phone' to 'phone' for Prisma
+      console.log("Submitting registration with data:", formData);
+      await register(formData);
     },
-    [formData, register, error, navigate]
+    [formData, confirmPassword, register]
   );
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-gray-800 p-8 flex flex-col gap-6">
-
-        {/* Header */}
-        <header className="flex flex-col items-center gap-2 text-center">
-          <img
-            src="/logo.png"
-            alt="Ingeni Logo"
-            className="w-20 h-20 mx-auto object-contain"
-          />
-          <h1 className="font-poppins font-bold text-2xl text-white tracking-wide">
-            Join Ingeni
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-8">
+      <div className="w-100 max-w-125 mx-auto bg-gray-800 p-8 flex flex-col gap-6 shadow-2xl rounded-xl border border-gray-700">
+        
+        {/* Branding */}
+        <header className="flex flex-col items-center text-center gap-2">
+          <img src="/logo.png" className="w-16 h-16 object-contain" alt="Ingeri Logo" />
+          <h1 className="text-2xl font-bold text-white tracking-tight font-poppins">
+            Join Ingeri
           </h1>
-          <p className="font-poppins text-sm text-gray-400 uppercase tracking-widest">
-            Create your account
+          <p className="text-xs text-gray-400 uppercase tracking-widest font-poppins">
+            Create your account today
           </p>
         </header>
 
-        {/* Form */}
+        {/* The Register Form Component */}
         <RegisterForm
           handleSubmit={handleSubmit}
           handleChange={handleChange}
-          error={displayError}      // ✅ shows local or API error
+          error={localError ?? error} // Priority: show local validation errors first
           formData={formData}
-          loading={isLoading}       // ✅ loading from context
+          loading={isLoading}
           confirmPassword={confirmPassword}
           setConfirmPassword={setConfirmPassword}
         />
 
-        {/* Footer */}
-        <p className="font-poppins text-gray-400 text-xs text-center">
-          Already have an account?{" "}
-          <Link
-            to="/login"
-            className="text-white underline hover:text-gray-300 transition-colors"
-          >
-            Login here
-          </Link>
-        </p>
-
+        {/* Footer Links */}
+        <footer className="flex flex-col gap-4">
+          <p className="font-poppins text-gray-400 text-xs text-center">
+            Already have an account?{" "}
+            <Link
+              to="/login"
+              className="text-indigo-400 font-semibold hover:text-indigo-300 transition-colors"
+            >
+              Sign In here
+            </Link>
+          </p>
+          
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-gray-700"></span>
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase">
+              <span className="bg-gray-800 px-2 text-gray-500 font-poppins">
+                Secure 256-bit Encryption
+              </span>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );

@@ -141,7 +141,7 @@ const About = () => {
             label="Explore Collection"
             variant="outline"
             className="border-gray-500 text-gray-300 hover:bg-gray-800"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/products")}
           />
         </div>
       </section>

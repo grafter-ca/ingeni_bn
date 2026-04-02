@@ -8,14 +8,14 @@ import {
   type ReactNode,
 } from "react";
 import type { AuthState } from "../types";
-import type { LoginPayload, RegisterPayload } from "../types/api";
+import type { LoginPayload, RegisterPayloadProps } from "../types/api";
 import { authReducer, initialAuthState } from "../reducers/userReducer";
-import { authService } from "../services/authService";
+import { authClient } from "../libs/auth-client";
 
 type AuthContextActions = {
   login: (payload: LoginPayload) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
-  logout: () => void;
+  register: (payload: RegisterPayloadProps) => Promise<void>;
+  logout: () => Promise<void>;
   clearError: () => void;
 };
 
@@ -25,86 +25,101 @@ const AuthActionsContext = createContext<AuthContextActions | null>(null);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(authReducer, initialAuthState);
 
-  // useEffect — rehydrate token + user from localStorage
+  // 1. Rehydrate Session (Check if user is already logged in)
   useEffect(() => {
-    const token = localStorage.getItem("ingeni_token");
-    if (token) {
-      authService
-        .getProfile(token)
-        .then((apiUser) => {
+    const checkSession = async () => {
+      try {
+        dispatch({ type: "LOGIN_START" });
+        const { data: session } = await authClient.getSession();
+
+        if (session?.user) {
           dispatch({
             type: "LOGIN_SUCCESS",
             payload: {
-              id: String(apiUser.id),
-              name: apiUser.name,
-              email: apiUser.email,
+              id: session.user.id,
+              name: session.user.name,
+              email: session.user.email,
+              role: (session.user as any).role, // Ensure your backend includes role in the session payload
             },
           });
-        })
-        .catch(() => {
-          localStorage.removeItem("ingeni_token");
-        });
-    }
+        } else {
+          dispatch({ type: "LOGOUT" });
+        }
+      } catch (error) {
+        console.error("Auth hydration failed:", error);
+        dispatch({ type: "LOGOUT" });
+      }
+    };
+
+    checkSession();
   }, []);
 
-  // useCallback — login with real API
+  // 2. Login Logic
   const login = useCallback(async (payload: LoginPayload) => {
     dispatch({ type: "LOGIN_START" });
-    try {
-      const tokens = await authService.login(payload);
-      localStorage.setItem("ingeni_token", tokens.access_token);
 
-      const apiUser = await authService.getProfile(tokens.access_token);
+    const { data, error } = await authClient.signIn.email({
+      email: payload.email,
+      password: payload.password,
+    });
+
+    if (error) {
+      dispatch({
+        type: "LOGIN_ERROR",
+        payload: error.message || "Login failed. Please check your credentials.",
+      });
+    } else if (data?.user) {
       dispatch({
         type: "LOGIN_SUCCESS",
         payload: {
-          id: String(apiUser.id),
-          name: apiUser.name,
-          email: apiUser.email,
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
         },
-      });
-    } catch (err) {
-      dispatch({
-        type: "LOGIN_ERROR",
-        payload: err instanceof Error ? err.message : "Login failed",
       });
     }
   }, []);
 
-  // useCallback — register with real API
-  const register = useCallback(async (payload: RegisterPayload) => {
+  // 3. Register Logic (Mapped to Prisma Schema)
+  const register = useCallback(async (payload: RegisterPayloadProps) => {
     dispatch({ type: "LOGIN_START" });
-    try {
-      await authService.register({
-        ...payload,
-        avatar: payload.avatar ?? "https://picsum.photos/800",
+
+    const { data, error } = await authClient.signUp.email({
+      email: payload.email,
+      password: payload.password,
+      name: payload.name,
+      image: payload.image ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${payload.name}`,
+      ...{
+        phone: payload.phone,
+        country: payload.country,
+      }
+    });
+
+    if (error) {
+      dispatch({
+        type: "LOGIN_ERROR",
+        payload: error.message || "Registration failed. Try again.",
       });
-      // Auto-login after register
-      const tokens = await authService.login({
-        email: payload.email,
-        password: payload.password,
-      });
-      localStorage.setItem("ingeni_token", tokens.access_token);
-      const apiUser = await authService.getProfile(tokens.access_token);
+    } else if (data?.user) {
       dispatch({
         type: "LOGIN_SUCCESS",
         payload: {
-          id: String(apiUser.id),
-          name: apiUser.name,
-          email: apiUser.email,
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
         },
-      });
-    } catch (err) {
-      dispatch({
-        type: "LOGIN_ERROR",
-        payload: err instanceof Error ? err.message : "Registration failed",
       });
     }
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("ingeni_token");
-    dispatch({ type: "LOGOUT" });
+  // 4. Logout Logic
+  const logout = useCallback(async () => {
+    try {
+      await authClient.signOut();
+      dispatch({ type: "LOGOUT" });
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   }, []);
 
   const clearError = useCallback(() => {
@@ -125,6 +140,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
+// Hooks
 export const useAuthState = () => {
   const ctx = useContext(AuthStateContext);
   if (!ctx) throw new Error("useAuthState must be used within AuthProvider");

@@ -1,0 +1,75 @@
+
+services:
+  # --- 1. DATABASE (Local PostgreSQL) ---
+  db:
+    image: postgres:15-alpine
+    container_name: store_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-admin}
+      POSTGRES_HOST: ${DB_HOST:-localhost}
+      POSTGRES_PORT: ${DB_PORT:-5432}
+      POSTGRES_DB: ${DB_NAME:-store_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ingeri_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-store_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- 2. BACKEND (NestJS) ---
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ingeri_api
+    restart: always
+    env_file:
+      - .env
+    command: npm run start:prod
+    environment:
+      # NOTE: To use the local DB container, your DATABASE_URL in .env 
+      # should be: postgresql://postgres:password@db:5432/store_db
+      DATABASE_URL: ${DATABASE_URL}
+      PORT: ${PORT}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      NODE_ENV: production
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ingeri_network
+
+  # --- 3. FRONTEND (React + Nginx) ---
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ingeri_ui
+    restart: always
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=${BETTER_AUTH_URL}
+    depends_on:
+      - api
+    networks:
+      - ingeri_network
+
+networks:
+  ingeri_network:
+    driver: bridge
+
+volumes:
+  postgres_data:

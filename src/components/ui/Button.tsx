@@ -4,6 +4,7 @@ const Button = ({
   label,
   variant = "primary",
   className = "",
+  type = "button",
   icon: Icon,
   iconPosition = "right",
   onClick,
@@ -19,6 +20,7 @@ const Button = ({
     <button
       className={`${base} ${styles[variant]} ${Icon ? "flex items-center gap-2" : ""} ${className}`.trim()}
       onClick={onClick}
+      type={type}
     >
       {Icon && iconPosition === "left"  && <Icon size={18} />}
       {label}

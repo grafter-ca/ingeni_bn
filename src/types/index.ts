@@ -19,6 +19,7 @@ export interface ButtonProps {
   label: string;
   variant?: "primary" | "outline";
   className?: string;
+  type?: "button" | "submit" | "reset";
   icon?: LucideIcon;
   iconPosition?: "left" | "right";
   onClick?: () => void;
@@ -40,6 +41,9 @@ export type User = {
   id: string;
   name: string;
   email: string;
+  image?: string | null;
+  phone?: string;
+  role?: "ADMIN" | "VENDOR" | "USER";
   country?: string;
 };
 
