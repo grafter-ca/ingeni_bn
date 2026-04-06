@@ -1,37 +1,44 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import RegisterForm from "../../components/forms/RegisterForm";
-import { useAuth } from "../../context/AuthContext";
+import { useAuthState, useAuthActions } from "../../context/AuthContext";
 import type { RegisterPayloadProps } from "../../types/api";
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
-  const { register, isLoading, error, clearError, user } = useAuth();
+  
+  // 1. Destructure from the updated context hooks
+  const { user, isLoading, error } = useAuthState();
+  const { register } = useAuthActions();
 
-  // 1. Initial State
   const [formData, setFormData] = useState<RegisterPayloadProps>({
     name: "",
     email: "",
     password: "",
     country: "",
-    phone: "", // This will be mapped to phone in the AuthProvider/Service
+    phone: "",
+    role: "USER", // Default role
+    storeName: "",
   });
 
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   /**
-   * SEAMLESS REDIRECT
-   * Once the user is successfully registered and logged in by Better-Auth,
-   * we redirect them to the shop or onboarding.
+   * SEAMLESS REDIRECT LOGIC
+   * Watches the 'user' state. As soon as Better-Auth logs them in, 
+   * we push them to the correct dashboard based on their role.
    */
   useEffect(() => {
     if (user) {
-      switch (user.role) {
+      const userRole = user.role?.toUpperCase();
+      
+      switch (userRole) {
         case "ADMIN":
           navigate("/admin", { replace: true });
           break;
         case "VENDOR":
+          // Vendors go to their specific inventory/onboarding
           navigate("/vendor/inventory", { replace: true });
           break;
         default:
@@ -48,11 +55,10 @@ const Register: React.FC = () => {
     (field: keyof RegisterPayloadProps, value: string) => {
       setFormData((prev) => ({ ...prev, [field]: value }));
       
-      // Clean up errors as the user types
+      // Clear local validation errors when user starts fixing the field
       if (localError) setLocalError(null);
-      if (error) clearError();
     },
-    [error, localError, clearError]
+    [localError]
   );
 
   /**
@@ -62,9 +68,19 @@ const Register: React.FC = () => {
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
 
-      // 2. Local Validations (Before hitting the API)
+      // 2. Comprehensive Local Validations
+      if (!formData.name || !formData.email || !formData.password) {
+        setLocalError("Please fill in all required fields.");
+        return;
+      }
+
       if (formData.password !== confirmPassword) {
         setLocalError("Passwords do not match.");
+        return;
+      }
+
+      if (formData.password.length < 8) {
+        setLocalError("Password must be at least 8 characters.");
         return;
       }
 
@@ -73,24 +89,21 @@ const Register: React.FC = () => {
         return;
       }
 
-      if (!formData.country) {
-        setLocalError("Please select your country.");
-        return;
-      }
-
+      // 3. Clear local errors and trigger Context Register
       setLocalError(null);
       
-      // 3. Trigger the AuthContext register logic
-      // Note: AuthContext/AuthService will map 'phone' to 'phone' for Prisma
-      console.log("Submitting registration with data:", formData);
-      await register(formData);
+      try {
+        await register(formData);
+      } catch (err) {
+        console.error("Registration flow failed:", err);
+      }
     },
     [formData, confirmPassword, register]
   );
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-8">
-      <div className="w-100 max-w-125 mx-auto bg-gray-800 p-8 flex flex-col gap-6 shadow-2xl rounded-xl border border-gray-700">
+      <div className="w-full max-w-lg mx-auto bg-gray-800 p-8 flex flex-col gap-6 shadow-2xl rounded-xl border border-gray-700">
         
         {/* Branding */}
         <header className="flex flex-col items-center text-center gap-2">
@@ -99,7 +112,7 @@ const Register: React.FC = () => {
             Join Ingeri
           </h1>
           <p className="text-xs text-gray-400 uppercase tracking-widest font-poppins">
-            Create your account today
+            {formData.role === "VENDOR" ? "Setup your vendor store" : "Create your account today"}
           </p>
         </header>
 
@@ -107,7 +120,8 @@ const Register: React.FC = () => {
         <RegisterForm
           handleSubmit={handleSubmit}
           handleChange={handleChange}
-          error={localError ?? error} // Priority: show local validation errors first
+          // Display local validation errors first, then API errors from context
+          error={localError || error} 
           formData={formData}
           loading={isLoading}
           confirmPassword={confirmPassword}

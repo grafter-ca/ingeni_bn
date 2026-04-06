@@ -7,11 +7,14 @@ import {
   Patch, 
   Delete, 
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ProductsService } from './products.service.js';
-import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
+import { AllowAnonymous, Roles } from '@thallesp/nestjs-better-auth';
+import { RolesGuard } from '../auth/guards/roles.guard.js';
 
 @Controller('products')
+@UseGuards(RolesGuard)
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
@@ -52,26 +55,29 @@ export class ProductsController {
     const cleanId = id.replace('local-', '').replace('fake-', '');
     
     // Convert to number for your DB lookup
-    return this.productsService.findOne(Number(cleanId));
+    return this.productsService.findOne(cleanId);
   }
 
   @Post()
+  @Roles(['VENDOR','ADMIN'])
   async create(@Body() createProductDto: any) {
     return this.productsService.create(createProductDto);
   }
 
   @Patch(':id')
+  @Roles(['VENDOR','ADMIN'])
   async update(
     @Param('id') id: string, 
     @Body() updateProductDto: any
   ) {
     const cleanId = id.replace('local-', '').replace('fake-', '');
-    return this.productsService.update(Number(cleanId), updateProductDto);
+    return this.productsService.update(cleanId, updateProductDto);
   }
 
   @Delete(':id')
+  @Roles(['ADMIN'])
   async remove(@Param('id') id: string) {
     const cleanId = id.replace('local-', '').replace('fake-', '');
-    return this.productsService.remove(Number(cleanId));
+    return this.productsService.remove(cleanId);
   }
 }

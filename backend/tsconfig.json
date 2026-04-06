@@ -2,16 +2,12 @@
   "compilerOptions": {
     "module": "node16",
     "moduleResolution": "node16",
-    "baseUrl": "./",
-    // 1. ADD THIS: Explicitly tell TS where to look for the client
     "paths": {
-      "@prisma/client": ["node_modules/@prisma/client"],
-      "src/*": ["src/*"],
-    },
-    "skipLibCheck": true, 
-    // 3. ADD THIS: Helps with commonjs/esm interop
+  "src/*": ["./src/*"]
+},
+
+    "skipLibCheck": true,
     "allowJs": true,
-    
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
     "isolatedModules": true,
@@ -20,16 +16,17 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "ES2023",
+    "target": "ES2022",
     "sourceMap": true,
     "outDir": "./dist",
-    "incremental": true,
+    "rootDir": "./src",
+    "incremental": false,
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false
   },
-  // 4. ADD THIS: Ensure TS scans your source and the generated prisma folder
-  "include": ["src/**/*", "node_modules/.prisma/client/index.d.ts"]
+  "include": ["src/**/*"],
+"exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
 }

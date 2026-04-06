@@ -59,6 +59,7 @@ const ProductDetail = () => {
         id: String(product.id),
         name: product.title,
         price: product.price,
+        productId: String(product.id),
         image: product.images[0],
       });
     }
@@ -103,7 +104,6 @@ const ProductDetail = () => {
           </div>
         </div>
       )}
-
       {/* Navigation Header */}
       <nav className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-lg border-b border-white/5 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">

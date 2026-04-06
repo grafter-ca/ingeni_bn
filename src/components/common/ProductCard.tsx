@@ -21,6 +21,7 @@ const ProductCard = ({ product }: Props) => {
         id: String(product.id),
         name: product.title,
         price: product.price,
+        productId: String(product.id),
         image: mainImage,
       });
     },

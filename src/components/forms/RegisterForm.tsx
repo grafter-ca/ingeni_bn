@@ -27,7 +27,7 @@ export default function RegisterForm({
           value={formData[field.field] ?? ""}
         />
       ))}
-      
+
       <Input
         label="Confirm Password"
         type="password"
@@ -35,8 +35,6 @@ export default function RegisterForm({
         onChange={(value) => setConfirmPassword(value)}
         value={confirmPassword}
       />
-
-      {error && <p className="text-xs text-red-500 text-center">{error}</p>}
 
       {/* Flag & Phone Number Input */}
       <div className="flex flex-col gap-1 ">
@@ -49,16 +47,28 @@ export default function RegisterForm({
           onChange={(phone) => handleChange("phone", phone)}
           inputClassName="!w-full !bg-gray-700 !text-white !border-gray-600 !h-10 !rounded-r"
           countrySelectorStyleProps={{
-          buttonClassName: "!bg-gray-700 !border-gray-600 !pl-4 !h-10 !rounded-l",
+            buttonClassName:
+              "!bg-gray-700 !border-gray-600 !pl-4 !h-10 !rounded-l",
           }}
         />
       </div>
 
-      <CountrySelect 
-      value={formData.country}
-      onChange={(country) => handleChange("country", country)}
-      error={error && !formData.country ? "Please select a country." : undefined}
+      <CountrySelect
+        value={formData.country}
+        onChange={(country) => handleChange("country", country)}
+        error={
+          error && !formData.country ? "Please select a country." : undefined
+        }
       />
+
+      {/* API Error Message */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/50 p-3 rounded">
+          <p className="text-red-500 text-xs text-center font-poppins">
+            {error}
+          </p>
+        </div>
+      )}
 
       <Button
         disabled={loading}

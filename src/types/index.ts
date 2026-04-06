@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { Order } from "./api";
 
 export interface RegisterProps {
     name?: string;
@@ -52,6 +53,7 @@ export type CartItem = {
   name: string;
   price: number;
   quantity: number;
+  productId: string;
   image?: string;
 };
 
@@ -68,4 +70,11 @@ export type AuthAction =
   | { type: "LOGOUT" }
   | { type: "CLEAR_ERROR" };
 
-
+export interface VendorDashboardData {
+  stats: {
+    revenue: string;
+    activeOrders: number;
+    productCount: string;
+  } | null;
+  orders: Order[];
+}

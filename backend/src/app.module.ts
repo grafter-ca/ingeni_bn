@@ -5,9 +5,10 @@ import { PrismaService } from './prisma/prisma.service.js';
 import { getAuthConfiguration } from './auth.js';
 import { ConfigModule } from '@nestjs/config';
 import { ProductsModule } from './products/products.module.js';
-import { AuthModule  as Athenticator } from './auth/auth.module.js';
 import { UserModule } from './user/user.module.js';
 import { CategoryModule } from './category/category.module.js';
+import { OrderService } from './order/order.service.js';
+import { OrderModule } from './order/order.module.js';
 
 @Module({
   imports: [
@@ -26,11 +27,11 @@ import { CategoryModule } from './category/category.module.js';
       },
     }),
     ProductsModule,
-    Athenticator,
     UserModule,
     CategoryModule,
+    OrderModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [OrderService],
 })
 export class AppModule {}

@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useProductStore } from "../store/productStore";
 
 // Single Responsibility: manages product fetching lifecycle
-export const useProducts = (categoryId?: number) => {
+export const useProducts = (categoryName?: string) => {
   const {
     filteredProducts,
     categories,
@@ -14,8 +14,8 @@ export const useProducts = (categoryId?: number) => {
 
   // useEffect — fetch on mount or category change
   useEffect(() => {
-    fetchProducts(categoryId ? { categoryId } : {});
-  }, [categoryId, fetchProducts]);
+    fetchProducts(categoryName ? { categoryName: categories.find(c => c.id === categoryName)?.name } : {categoryName: undefined});
+  }, [categoryName, fetchProducts]);
 
   useEffect(() => {
     fetchCategories();

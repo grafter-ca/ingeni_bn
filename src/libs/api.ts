@@ -20,6 +20,28 @@ async function baseRequest<T>(baseUrl: string, endpoint: string, options: any = 
 export const localApiClient = <T>(endpoint: string) => 
   baseRequest<T>(LOCAL_BASE, endpoint, { credentials: "include" });
 
+export const localApi = {
+  get: <T>(endpoint: string) => 
+    baseRequest<T>(LOCAL_BASE, endpoint, { method: "GET", credentials: "include" }),
+
+  post: <T>(endpoint: string, body: any) => 
+    baseRequest<T>(LOCAL_BASE, endpoint, { 
+      method: "POST", 
+      body: JSON.stringify(body), 
+      credentials: "include" 
+    }),
+
+  patch: <T>(endpoint: string, body: any) => 
+    baseRequest<T>(LOCAL_BASE, endpoint, { 
+      method: "PATCH", 
+      body: JSON.stringify(body), 
+      credentials: "include" 
+    }),
+
+  delete: <T>(endpoint: string) => 
+    baseRequest<T>(LOCAL_BASE, endpoint, { method: "DELETE", credentials: "include" }),
+};
+
 // ✅ Worker 2: Fake
 export const fakeApiClient = <T>(endpoint: string) => 
   baseRequest<T>(FAKE_BASE, endpoint);

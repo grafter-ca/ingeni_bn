@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useRef, type Dispatch, type SetStateAction } from "react";
 import Button from "../ui/Button";
 import { Input } from "../ui/Input";
 import type { LoginPayload } from "../../types/api";
 import { Link } from "react-router-dom";
+import HCaptcha from "@hcaptcha/react-hcaptcha";
 
 interface LoginFormProps {
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
@@ -10,15 +11,20 @@ interface LoginFormProps {
   error: string | null;
   formData: LoginPayload;
   loading?: boolean;
+setCaptchaToken: Dispatch<SetStateAction<string | undefined>>;
+  onCaptchaChange: (token:string) => void;
 }
+
 
 const LoginForm: React.FC<LoginFormProps> = ({ 
   handleSubmit, 
   handleChange, 
+  onCaptchaChange,
   error, 
   formData, 
   loading 
 }) => {
+  const captchaRef = useRef<HCaptcha>(null);
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       <Input
@@ -38,6 +44,15 @@ const LoginForm: React.FC<LoginFormProps> = ({
         onChange={(val) => handleChange("password", val)}
         required
       />
+       
+       <div className="flex justify-center my-4">
+                   <HCaptcha
+                     sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY || "your-site-key"}
+                     onVerify={onCaptchaChange}
+                     ref={captchaRef}
+                     theme="dark"
+                   />
+                 </div>
 
       {/* API Error Message */}
       {error && (

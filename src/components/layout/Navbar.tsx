@@ -2,16 +2,21 @@ import { useState, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ShoppingCart, Menu, X, LogOut } from "lucide-react";
 import Button from "../ui/Button";
-import { useAuth } from "../../context/AuthContext";
 import { useCartSummary } from "../../hooks/useCartSummary";
 import { navLinks } from "../../constants";
+import { useCartActions } from "../../hooks/useCartActions";
+import { useAuthActions, useAuthState } from "../../context/AuthContext";
+
 
 const Navbar = () => {
-  const { user, logout } = useAuth();
-  const { totalItems } = useCartSummary();
+  const { user } = useAuthState();
+  const { logout } = useAuthActions();
+
+    const { totalItems } = useCartSummary();
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const {handleClearCart} = useCartActions();
 
   const isActive = useCallback(
     (path: string) =>
@@ -20,6 +25,12 @@ const Navbar = () => {
         : "text-gray-400 hover:text-white",
     [location.pathname]
   );
+
+  const handleLogout = useCallback(() => {
+    logout();
+    handleClearCart(); // Clear cart on logout
+    setMenuOpen(false);
+  }, [logout]);
 
   const handleMenuClose = useCallback(() => setMenuOpen(false), []);
 
@@ -58,7 +69,7 @@ const Navbar = () => {
           {user ? (
             <div className="flex items-center gap-3">
               <span className="text-gray-400 text-sm">Hi, {user.name}</span>
-              <button onClick={logout} className="text-gray-400 hover:text-white transition-colors">
+              <button onClick={handleLogout} className="text-gray-400 hover:text-white transition-colors">
                 <LogOut size={18} />
               </button>
             </div>
@@ -97,7 +108,7 @@ const Navbar = () => {
           </Link>
           {user ? (
             <button
-              onClick={() => { logout(); handleMenuClose(); }}
+              onClick={() => { handleLogout(); handleMenuClose(); }}
               className="text-left text-sm capitalize tracking-widest w-28 text-gray-400 hover:text-white"
             >
               Logout

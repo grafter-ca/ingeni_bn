@@ -40,7 +40,7 @@ export class ProductsService {
     });
   }
 
-  async findOne(id: number) {
+  async findOne(id: string) {
     return this.prisma.product.findUnique({
       where: { id },
       include: { category: true }, // Ensure category info is returned for details page
@@ -68,7 +68,7 @@ export class ProductsService {
     });
   }
 
-  async update(id: number, data: any) {
+  async update(id: string, data: any) {
     return this.prisma.product.update({
       where: { id },
       data,
@@ -76,7 +76,7 @@ export class ProductsService {
     });
   }
 
-  async remove(id: number) {
+  async remove(id: string) {
     return this.prisma.product.delete({ where: { id } });
   }
 }

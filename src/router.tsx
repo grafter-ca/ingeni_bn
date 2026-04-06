@@ -14,32 +14,64 @@ import AdminLayout from "./components/layout/AdminLayout";
 import VendorLayout from "./components/layout/VendorLayout";
 import Vendor from "./pages/vendor/VendorPage";
 import Inventory from "./pages/vendor/Inventory";
-import  VerifyEmail  from "./pages/VerifyEmail";
+import VerifyEmail from "./pages/VerifyEmail";
+
+// New Order-Related Pages
+import CheckoutPage from "./pages/CheckoutPage";
+import OrderSuccess from "./pages/OrderSuccess";
+import MyOrders from "./pages/MyOrders";
 
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <Layout />,
     children: [
-      { index: true,              element: <Home />          },
-      { path: "about",            element: <About />         },
-      { path: "products",         element: <Products />      },
-      { path: "products/:id",     element: <ProductDetail /> },
-      { path: "login",            element: <Login />         },
-      { path: "register",         element: <Register />      },
-      { path: "verify-email",     element: <VerifyEmail />   },
+      { index: true, element: <Home /> },
+      { path: "about", element: <About /> },
+      { path: "products", element: <Products /> },
+      { path: "products/:id", element: <ProductDetail /> },
+      { path: "login", element: <Login /> },
+      { path: "register", element: <Register /> },
+      { path: "verify-email", element: <VerifyEmail /> },
+
+      // --- USER PROTECTED ROUTES ---
       {
         path: "cart",
         element: (
-          <ProtectedRoute>   
+          <ProtectedRoute>
             <Cart />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "checkout",
+        element: (
+          <ProtectedRoute>
+            <CheckoutPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "order-success/:orderNumber",
+        element: (
+          <ProtectedRoute>
+            <OrderSuccess />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "my-orders",
+        element: (
+          <ProtectedRoute>
+            <MyOrders />
           </ProtectedRoute>
         ),
       },
       { path: "*", element: <NotFound /> },
     ],
-    
   },
+
+  // --- ADMIN ROUTES ---
   {
     path: "/admin",
     element: <AdminLayout />,
@@ -52,10 +84,11 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      // Additional admin routes can be added here
-    { path: "*", element: <NotFound /> },
-    ]
+      // Admin-specific order management could go here
+    ],
   },
+
+  // --- VENDOR ROUTES ---
   {
     path: "/vendor",
     element: <VendorLayout />,
@@ -69,15 +102,23 @@ export const router = createBrowserRouter([
         ),
       },
       {
-       path: "inventory",
-       element: (
-         <ProtectedRoute requiredRole="VENDOR">
-            <Inventory /> 
-         </ProtectedRoute>
-       )
-    },
-   { path: "*", element: <NotFound /> },
-  ]
+        path: "inventory",
+        element: (
+          <ProtectedRoute requiredRole="VENDOR">
+            <Inventory />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "orders",
+        element: (
+          <ProtectedRoute requiredRole="VENDOR">
+            {/* Component to see orders containing vendor products */}
+            <div className="text-white">Vendor Order Management</div>
+          </ProtectedRoute>
+        ),
+      },
+    ],
   },
   { path: "*", element: <NotFound /> },
 ]);

@@ -11,7 +11,7 @@ export class CategoryService {
     });
   }
 
-  async findOne(id: number) {
+  async findOne(id: string) {
     const category = await this.prisma.category.findUnique({
       where: { id },
       include: {

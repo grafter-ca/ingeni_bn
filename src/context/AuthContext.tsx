@@ -1,135 +1,73 @@
-import {
-  createContext,
-  useContext,
-  useReducer,
-  useEffect,
-  useCallback,
-  useMemo,
-  type ReactNode,
-} from "react";
-import type { AuthState } from "../types";
-import type { LoginPayload, RegisterPayloadProps } from "../types/api";
+import React, { createContext, useReducer, useCallback, useMemo, useEffect, useContext } from "react";
+import { authService } from "../services/auth.service";
 import { authReducer, initialAuthState } from "../reducers/userReducer";
-import { authClient } from "../libs/auth-client";
+import type { LoginPayload, RegisterPayloadProps } from "../types/api";
 
-type AuthContextActions = {
-  login: (payload: LoginPayload) => Promise<void>;
-  register: (payload: RegisterPayloadProps) => Promise<void>;
-  logout: () => Promise<void>;
-  clearError: () => void;
-};
+// --- Context Definitions ---
+const AuthStateContext = createContext(initialAuthState);
+const AuthActionsContext = createContext<any>(null);
 
-const AuthStateContext = createContext<AuthState | null>(null);
-const AuthActionsContext = createContext<AuthContextActions | null>(null);
-
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, dispatch] = useReducer(authReducer, initialAuthState);
 
-  // 1. Rehydrate Session (Check if user is already logged in)
+  // 1. Initial Session Check (Rehydration)
   useEffect(() => {
-    const checkSession = async () => {
+    let isMounted = true;
+    
+    const initSession = async () => {
+      dispatch({ type: "LOGIN_START" }); // Set loading: true
       try {
-        dispatch({ type: "LOGIN_START" });
-        const { data: session } = await authClient.getSession();
-
-        if (session?.user) {
-          dispatch({
-            type: "LOGIN_SUCCESS",
-            payload: {
-              id: session.user.id,
-              name: session.user.name,
-              email: session.user.email,
-              role: (session.user as any).role, // Ensure your backend includes role in the session payload
-            },
-          });
-        } else {
-          dispatch({ type: "LOGOUT" });
+        const { data, error } = await authService.getSession();
+        
+        if (isMounted) {
+          if (data?.user && !error) {
+            dispatch({ type: "LOGIN_SUCCESS", payload: data.user as any });
+          } else {
+            dispatch({ type: "LOGOUT" });
+          }
         }
-      } catch (error) {
-        console.error("Auth hydration failed:", error);
-        dispatch({ type: "LOGOUT" });
+      } catch (err) {
+        if (isMounted) dispatch({ type: "LOGOUT" });
       }
     };
 
-    checkSession();
+    initSession();
+    return () => { isMounted = false; };
   }, []);
 
-  // 2. Login Logic
-  const login = useCallback(async (payload: LoginPayload) => {
+  // 2. Optimized Actions
+  const login = useCallback(async (payload: LoginPayload, token?: string) => {
     dispatch({ type: "LOGIN_START" });
-
-    const { data, error } = await authClient.signIn.email({
-      email: payload.email,
-      password: payload.password,
-    });
-
+    const { data, error } = await authService.signIn(payload, token);
+    
     if (error) {
-      dispatch({
-        type: "LOGIN_ERROR",
-        payload: error.message || "Login failed. Please check your credentials.",
-      });
+      dispatch({ type: "LOGIN_ERROR", payload: error.message || "Login failed" });
     } else if (data?.user) {
-      dispatch({
-        type: "LOGIN_SUCCESS",
-        payload: {
-          id: data.user.id,
-          name: data.user.name,
-          email: data.user.email,
-        },
-      });
+      dispatch({ type: "LOGIN_SUCCESS", payload: data.user as any });
     }
   }, []);
 
-  // 3. Register Logic (Mapped to Prisma Schema)
   const register = useCallback(async (payload: RegisterPayloadProps) => {
     dispatch({ type: "LOGIN_START" });
-
-    const { data, error } = await authClient.signUp.email({
-      email: payload.email,
-      password: payload.password,
-      name: payload.name,
-      image: payload.image ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${payload.name}`,
-      ...{
-        phone: payload.phone,
-        country: payload.country,
-      }
-    });
-
+    const { data, error } = await authService.signUp(payload);
+    
     if (error) {
-      dispatch({
-        type: "LOGIN_ERROR",
-        payload: error.message || "Registration failed. Try again.",
-      });
+      dispatch({ type: "LOGIN_ERROR", payload: error.message || "Registration failed" });
     } else if (data?.user) {
-      dispatch({
-        type: "LOGIN_SUCCESS",
-        payload: {
-          id: data.user.id,
-          name: data.user.name,
-          email: data.user.email,
-        },
-      });
+      dispatch({ type: "LOGIN_SUCCESS", payload: data.user as any });
     }
   }, []);
 
-  // 4. Logout Logic
   const logout = useCallback(async () => {
     try {
-      await authClient.signOut();
+      await authService.signOut();
       dispatch({ type: "LOGOUT" });
     } catch (error) {
-      console.error("Logout failed:", error);
+      console.error("Logout failed", error);
     }
   }, []);
 
-  const clearError = useCallback(() => {
-    dispatch({ type: "CLEAR_ERROR" });
-  }, []);
-
-  const actions = useMemo(
-    () => ({ login, register, logout, clearError }),
-    [login, register, logout, clearError]
-  );
+  const actions = useMemo(() => ({ login, register, logout }), [login, register, logout]);
 
   return (
     <AuthStateContext.Provider value={state}>
@@ -140,17 +78,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// Hooks
-export const useAuthState = () => {
-  const ctx = useContext(AuthStateContext);
-  if (!ctx) throw new Error("useAuthState must be used within AuthProvider");
-  return ctx;
-};
-
-export const useAuthActions = () => {
-  const ctx = useContext(AuthActionsContext);
-  if (!ctx) throw new Error("useAuthActions must be used within AuthProvider");
-  return ctx;
-};
-
-export const useAuth = () => ({ ...useAuthState(), ...useAuthActions() });
+// --- Custom Hooks for easy usage ---
+export const useAuthState = () => useContext(AuthStateContext);
+export const useAuthActions = () => useContext(AuthActionsContext);
