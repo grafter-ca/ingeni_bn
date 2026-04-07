@@ -1,6 +1,6 @@
 // Product types
 export type ApiProduct = {
-  id: number | string; // Adjusted to string for merged products
+  id: string; // Adjusted to string for merged products
   origin?: "local" | "fake"; // Optional field to track source
   title: string;
   price: number;

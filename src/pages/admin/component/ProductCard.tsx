@@ -2,14 +2,21 @@ import { useCallback } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ShoppingCart, Eye } from "lucide-react";
-import type { ApiProduct } from "../../types/api";
-import { useCartActions } from "../../hooks/useCartActions";
+import type { ApiProduct } from "../../../types/api";
+import { useCartActions } from "../../../hooks/useCartActions";
+import { productService} from "../../../services/productService";
+import {useProductStore}  from "../../../store/productStore"
 
-type Props = { product: ApiProduct,isAdmin:string };
 
-const ProductCard = ({ product }: Props) => {
+type Props = { 
+    product: ApiProduct;
+    isAdmin:boolean
+ };
+
+const ProductCard = ({ product, isAdmin }: Props) => {
   const navigate = useNavigate();
   const { handleAddToCart } = useCartActions();
+  const {fetchProducts} = useProductStore()
 
   // Safely get the first image or a placeholder
   const mainImage = product.images?.[0] || "https://placehold.co/400x400/374151/9CA3AF?text=No+Image";
@@ -27,6 +34,12 @@ const ProductCard = ({ product }: Props) => {
     },
     [product, handleAddToCart, mainImage]
   );
+
+   const handleDelete = async (id: string) => {
+    if (!confirm("Delete this product?")) return;
+    await productService.deleteProduct(id);
+    await fetchProducts();
+  };
 
   return (
     <motion.div
@@ -95,6 +108,31 @@ const ProductCard = ({ product }: Props) => {
           )}
         </div>
       </div>
+      {isAdmin && (
+  <div className="flex gap-2 mt-3">
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(`/admin/products/${product.id}/edit`);
+      }}
+      className="text-xs text-blue-400 hover:underline"
+    >
+      Edit
+    </button>
+
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        if (confirm("Delete this product?")) {
+          handleDelete(product.id)
+        }
+      }}
+      className="text-xs text-red-400 hover:underline"
+    >
+      Delete
+    </button>
+  </div>
+)}
     </motion.div>
   );
 };

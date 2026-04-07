@@ -1,23 +1,26 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { UserRole } from '../../generated/prisma/index.js';
+import { UserRole, Prisma } from '../../generated/prisma/index.js';
 
 @Injectable()
 export class UserService {
   constructor(private prisma: PrismaService) {}
 
-  // Create a new user (Handles manual creation/Admin)
-  async create(data: any) {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: data.email },
-    });
+  /** Create a new user */
+  async create(data: Prisma.UserCreateInput) {
+    const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
     if (existing) throw new ConflictException('Email already registered');
 
     return this.prisma.user.create({ data });
   }
 
-  // Advanced Find All with Filter, Search, and Pagination
-  async findAll(role?: UserRole, search?: string, limit: number = 10, offset: number = 0) {
+  /** Find all users with optional role, search, and pagination */
+  async findAll(
+    role?: UserRole,
+    search?: string,
+    limit: number = 10,
+    offset: number = 0
+  ) {
     return this.prisma.user.findMany({
       where: {
         ...(role && { role }),
@@ -32,31 +35,83 @@ export class UserService {
       take: limit,
       skip: offset,
       orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { sessions: true, accounts: true } } }
+      include: { _count: { select: { sessions: true, accounts: true } } },
     });
   }
 
+  /** Find a user by ID */
   async findOneById(id: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      include: { accounts: true }
-    });
+    const user = await this.prisma.user.findUnique({ where: { id }, include: { accounts: true } });
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
     return user;
   }
 
+  /** Find a user by email */
   async findOneByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new NotFoundException(`User with email ${email} not found`);
+    return user;
   }
 
-  async updateProfile(id: string, data: any) {
-    return this.prisma.user.update({
-      where: { id },
-      data,
+  /** Update user profile (general fields) */
+  async updateProfile(id: string, data: Partial<Prisma.UserUpdateInput>) {
+    try {
+      return await this.prisma.user.update({ where: { id }, data });
+    } catch (err) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+  }
+
+  /** Direct role change, only allowed by admin */
+  async updateRole(currentUserRole: UserRole, targetUserId: string, newRole: UserRole) {
+    if (newRole === 'admin' && currentUserRole !== 'admin') {
+      throw new ForbiddenException('Only admins can assign the admin role.');
+    }
+    if (currentUserRole !== 'admin' && newRole !== 'vendor') {
+      throw new ForbiddenException('You do not have permission to change this user’s role.');
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { role: newRole },
     });
+    return user;
   }
 
+  /** User requests a role upgrade (pendingRole is set) */
+  async requestRoleUpgrade(userId: string, requestedRole: UserRole) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { role: requestedRole },
+    });
+    return user;
+  }
+  
+  /** Admin approves role upgrade */
+  async approveRoleUpgrade(adminId: string, targetUserId: string) {
+    const admin = await this.prisma.user.findUnique({ where: { id: adminId } });
+    if (!admin || admin.role !== 'admin') {
+      throw new ForbiddenException('Only admins can approve role changes.');
+    }
+
+    const targetUser = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!targetUser) throw new NotFoundException('Target user not found.');
+    if (!targetUser.role) throw new ForbiddenException('No pending role change request.');
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { role: targetUser.role },
+    });
+
+    return updatedUser;
+  }
+
+  /** Remove a user */
   async remove(id: string) {
-    return this.prisma.user.delete({ where: { id } });
+    try {
+      return await this.prisma.user.delete({ where: { id } });
+    } catch (err) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
   }
 }

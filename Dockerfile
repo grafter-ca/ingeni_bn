@@ -1,10 +1,10 @@
 # Stage 1: Build the Vite App
-FROM node:20-alpine AS build-stage
+FROM node:24-slim AS builder
 WORKDIR /app
 
 # Install dependencies (cached if package.json doesn't change)
 COPY package*.json ./
-RUN npm install
+RUN npm ci --network-timeout=100000
 
 # Copy source and build
 COPY . .
@@ -14,7 +14,7 @@ RUN npm run build
 FROM nginx:stable-alpine
 
 # Copy the static build from the first stage to Nginx
-COPY --from=build-stage /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy custom Nginx config for React Router support
 COPY nginx.conf /etc/nginx/conf.d/default.conf

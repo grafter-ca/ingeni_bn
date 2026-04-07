@@ -9,7 +9,7 @@ import Register from "./pages/Register";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/common/ProtectedRoute";
-import Admin from "./pages/Admin";
+import Admin from "./pages/admin/Admin";
 import AdminLayout from "./components/layout/AdminLayout";
 import VendorLayout from "./components/layout/VendorLayout";
 import Vendor from "./pages/vendor/VendorPage";
@@ -79,7 +79,7 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: (
-          <ProtectedRoute requiredRole="ADMIN">
+          <ProtectedRoute requiredRole="admin">
             <Admin />
           </ProtectedRoute>
         ),
@@ -96,7 +96,7 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: (
-          <ProtectedRoute requiredRole="VENDOR">
+          <ProtectedRoute requiredRole="vendor">
             <Vendor />
           </ProtectedRoute>
         ),
@@ -104,7 +104,7 @@ export const router = createBrowserRouter([
       {
         path: "inventory",
         element: (
-          <ProtectedRoute requiredRole="VENDOR">
+          <ProtectedRoute requiredRole="vendor">
             <Inventory />
           </ProtectedRoute>
         ),
@@ -112,7 +112,7 @@ export const router = createBrowserRouter([
       {
         path: "orders",
         element: (
-          <ProtectedRoute requiredRole="VENDOR">
+          <ProtectedRoute requiredRole="vendor">
             {/* Component to see orders containing vendor products */}
             <div className="text-white">Vendor Order Management</div>
           </ProtectedRoute>

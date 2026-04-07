@@ -1,9 +1,16 @@
 // backend/src/libs/auth.ts
 import { betterAuth } from "better-auth";
-import { admin, organization, multiSession, captcha, haveIBeenPwned,lastLoginMethod } from "better-auth/plugins";
+import {
+  admin,
+  organization,
+  multiSession,
+  captcha,
+  haveIBeenPwned,
+  lastLoginMethod,
+} from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { Resend } from "resend";
-import { PrismaClient } from '../generated/prisma/client.js';
+import { PrismaClient } from "../generated/prisma/client.js";
 
 export const getAuthConfiguration = (prisma: PrismaClient) => {
   const resend = new Resend(process.env.RESEND_API_KEY);
@@ -14,37 +21,42 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
     }),
 
     // URL & Security
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8001",
-    
+    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8000",
+
     trustedOrigins: [
-      "http://localhost:3000", 
-      process.env.FRONTEND_URL || ""
+      "http://localhost:3000",
+      "http://localhost:5173",
+      process.env.FRONTEND_URL || "",
     ],
 
-    // 1. Production Role Logic
+    // ✅ ONLY custom fields you actually need
     user: {
       additionalFields: {
         phone: { type: "string", required: false },
         country: { type: "string", required: false },
-        role: { 
-          type: "string", 
-          required: false, 
-          defaultValue: "USER" // Roles: ADMIN, VENDOR, USER
-        },
-      }
+      },
     },
 
-    // 2. Automated Vendor Setup
+    // ✅ DATABASE HOOKS (clean + correct shape)
     databaseHooks: {
       user: {
         create: {
+          before: async (ctx) => {
+            // Do NOT inject role here — let Prisma default handle it
+            return {
+              data: {
+                ...ctx,
+              },
+            };
+          },
+
           after: async (user) => {
-            // If the user signed up as a VENDOR, create their store automatically
-            if (user.role === 'VENDOR') {
+            // Create vendor profile ONLY if role is 'vendor'
+            if (user.role === "vendor") {
               await prisma.vendor.create({
                 data: {
                   userId: user.id,
-                  storeName: `${user.name}'s Store`, 
+                  storeName: `${user.name}'s Store`,
                 },
               });
             }
@@ -53,36 +65,39 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       },
     },
 
-    // 3. Email & Password Setup
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: true, // PRODUCTION READY: Blocks login until verified
+      requireEmailVerification: true,
     },
 
-    advanced:{
+    advanced: {
       disableOriginCheck: true,
+      disableCSRFCheck: true,
     },
 
-    // 4. disable session
     session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24,    // Update session once a day
-    cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60 // 5 minutes
-    }
-  },
+      expiresIn: 60 * 60 * 24 * 7, // 7 days
+      updateAge: 60 * 60 * 24, // refresh daily
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60,
+      },
+    },
 
-    // 5. Production Email Verification
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
-      callbackURL: process.env.FRONTEND_URL || "http://localhost:3000/verify-email",
+      callbackURL:
+        process.env.FRONTEND_URL + "/verify-email" ||
+        "http://localhost:3000/verify-email",
 
-    sendVerificationEmail: async ({ user, url }) => {
+      sendVerificationEmail: async ({ user, url }) => {
+        console.log("Redirection url / verification url", url)
         try {
-          const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-          
+          const fromEmail =
+            process.env.RESEND_FROM_EMAIL ||
+            "onboarding@resend.dev";
+
           await resend.emails.send({
             from: `Ingeri Store <${fromEmail}>`,
             to: [user.email],
@@ -91,10 +106,17 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
               <div style="font-family: sans-serif; max-width: 600px; padding: 20px;">
                 <h2>Welcome to Ingeri, ${user.name}!</h2>
                 <p>Click the button below to verify your email and activate your account.</p>
-                <a href="${url}" style="background: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verify Email</a>
+                <a href="${process.env.FRONTEND_URL}/verify-email?token=${new URL(url).searchParams.get("token")}"
+                style="background: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                Verify Email
+                </a>
+                <div style="margin-top: 20px font-weight:100">
+                  <p>If you didn't made any registration yet. Ignore this email</p>
+                </div>
               </div>
             `,
           });
+
           console.log(`✅ Verification email sent to ${user.email}`);
         } catch (err) {
           console.error("❌ Failed to send verification email:", err);
@@ -102,24 +124,19 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       },
     },
 
-    //6. add pluggins
-     plugins: [
-      admin(), // For your CRUD & user management
-      
+    plugins: [
+      admin(),
       organization({
-        // Allows users to create/join teams (Vendors can be orgs)
-        allowUserToCreateOrganization: true, 
+        allowUserToCreateOrganization: true,
       }),
-
-      multiSession(), // Let users switch between Admin/Vendor accounts
-
+      multiSession(),
       captcha({
-        provider: "hcaptcha", // Set provider to hcaptcha
-        secretKey: process.env.HCAPTCHA_SECRET_KEY!, // Your Secret Key from hCaptcha dashboard
+        provider: "hcaptcha",
+        secretKey: process.env.HCAPTCHA_SECRET_KEY!,
+        endpoints: ["/sign-in/email"],
       }),
-
       haveIBeenPwned(),
-      lastLoginMethod()
+      lastLoginMethod(),
     ],
   });
 };

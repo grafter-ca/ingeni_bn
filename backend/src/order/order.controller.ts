@@ -25,7 +25,7 @@ export class OrderController {
   async getOrderDetails(@Param('id') id: string, @Req() req: any) {
     const order = await this.orderService.getOne(id);
     // Security: Only allow the owner or an ADMIN to see details
-    if (order.userId !== req.user.id && req.user.role !== UserRole.ADMIN) {
+    if (order.userId !== req.user.id && req.user.role !== UserRole.admin) {
       throw new ForbiddenException('You do not have access to this order');
     }
     return order;
@@ -35,7 +35,7 @@ export class OrderController {
 
   @Get('vendor/dashboard')
   async getVendorOrders(@Req() req: any) {
-    if (req.user.role !== UserRole.VENDOR) throw new ForbiddenException();
+    if (req.user.role !== UserRole.vendor) throw new ForbiddenException();
     // Logic: Get orders that contain products belonging to this vendor
     return this.orderService.getOrdersForVendor(req.user.id);
   }
@@ -44,7 +44,7 @@ export class OrderController {
 
   @Get('admin/all')
   async getAllOrders(@Req() req: any, @Query('status') status?: string) {
-    if (req.user.role !== UserRole.ADMIN) throw new ForbiddenException();
+    if (req.user.role !== UserRole.admin) throw new ForbiddenException();
     return this.orderService.getAllOrders(status);
   }
 
@@ -55,7 +55,7 @@ export class OrderController {
     @Req() req: any
   ) {
     // Both Admin and Vendor might need this, but usually Admin confirms shipping
-    if (req.user.role === UserRole.USER) throw new ForbiddenException();
+    if (req.user.role === UserRole.user) throw new ForbiddenException();
     return this.orderService.updateStatus(id, dto.status);
   }
 }

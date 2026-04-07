@@ -47,10 +47,11 @@ const LoginForm: React.FC<LoginFormProps> = ({
        
        <div className="flex justify-center my-4">
                    <HCaptcha
-                     sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY || "your-site-key"}
+                     sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY || "72ca1ee4-305c-4888-a7f2-47ca0c2ef752"}
                      onVerify={onCaptchaChange}
                      ref={captchaRef}
-                     theme="dark"
+                      theme="dark"
+                  {...(import.meta.env.MODE === "development" ? { disabled: true } : {})}
                    />
                  </div>
 

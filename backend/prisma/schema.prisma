@@ -10,9 +10,9 @@ datasource db {
 // --- ENUMS ---
 
 enum UserRole {
-  USER
-  ADMIN
-  VENDOR
+  user   
+  admin  
+  vendor 
 }
 
 enum OrderStatus {
@@ -50,7 +50,7 @@ model User {
   phone         String?   @unique // Kept as 'phone' per your request
   country       String?
   
-  role          UserRole  @default(USER)
+  role          UserRole  @default(user)
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

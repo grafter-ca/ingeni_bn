@@ -27,7 +27,10 @@ const CategoryShowcase = () => {
         </motion.div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {categories.slice(0, 10).map((cat, i) => (
+          {
+          categories.length == 0 ? 
+          <div>No category available yet!</div> : 
+          categories.slice(0, 10).map((cat, i) => (
             <motion.div
               key={cat.id}
               className="relative group overflow-hidden cursor-pointer rounded-lg aspect-square"

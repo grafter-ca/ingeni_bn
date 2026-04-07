@@ -17,7 +17,6 @@ const Register: React.FC = () => {
     password: "",
     country: "",
     phone: "",
-    role: "USER", // Default role
     storeName: "",
   });
 
@@ -31,7 +30,7 @@ const Register: React.FC = () => {
    */
   useEffect(() => {
     if (user) {
-      const userRole = user.role?.toUpperCase();
+      const userRole = user.role?.toLowerCase();
       
       switch (userRole) {
         case "ADMIN":
@@ -100,6 +99,7 @@ const Register: React.FC = () => {
     },
     [formData, confirmPassword, register]
   );
+
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-8">

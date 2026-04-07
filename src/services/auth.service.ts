@@ -4,7 +4,7 @@ import type { LoginPayload, RegisterPayloadProps } from "../types/api";
 export const authService = {
     // --- 1. CORE AUTH METHODS ---
 
-    signUp: async (data: RegisterPayloadProps) => {
+signUp: async (data: RegisterPayloadProps) => {
         return await authClient.signUp.email({
             email: data.email,
             password: data.password,

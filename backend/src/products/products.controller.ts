@@ -59,13 +59,13 @@ export class ProductsController {
   }
 
   @Post()
-  @Roles(['VENDOR','ADMIN'])
+  @Roles(['vendor','admin'])
   async create(@Body() createProductDto: any) {
     return this.productsService.create(createProductDto);
   }
 
   @Patch(':id')
-  @Roles(['VENDOR','ADMIN'])
+  @Roles(['vendor','admin'])
   async update(
     @Param('id') id: string, 
     @Body() updateProductDto: any
@@ -75,7 +75,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @Roles(['ADMIN'])
+  @Roles(['admin'])
   async remove(@Param('id') id: string) {
     const cleanId = id.replace('local-', '').replace('fake-', '');
     return this.productsService.remove(cleanId);
