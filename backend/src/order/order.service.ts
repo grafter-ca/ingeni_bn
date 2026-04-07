@@ -1,70 +1,72 @@
-import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { OrderStatus } from '../../generated/prisma/client.js'; // Import your Enum
+import { OrderStatus, PaymentMethod } from '../../generated/prisma/client.js';
+import type { CreateOrderDto } from './dto/create-order.dto.js';
 
 @Injectable()
 export class OrderService {
   constructor(private prisma: PrismaService) {}
 
-  // --- 0. CREATE ORDER ---
-  async createOrder(userId: string, dto: any) {
-  const productIds = dto.items.map((item: any) => item.productId);
-  const dbProducts = await this.prisma.product.findMany({
-    where: { id: { in: productIds } },
-  });
+  // --- CREATE ORDER ---
+  async createOrder(userId: string, dto: CreateOrderDto) {
+    const productIds = dto.items.map((item) => item.productId);
+    const dbProducts = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
 
-  let subtotal = 0;
-  const orderItemsData = dto.items.map((item: any) => {
-    const product = dbProducts.find((p) => p.id === item.productId);
-    if (!product) throw new BadRequestException(`Product ${item.productId} not found`);
-    
-    subtotal += product.price * item.quantity;
-    return {
-      productId: item.productId,
-      quantity: item.quantity,
-      priceAtPurchase: product.price,
-    };
-  });
+    if (dbProducts.length !== productIds.length) {
+      throw new BadRequestException("One or more products not found");
+    }
 
-  const taxAmount = subtotal * 0.18; 
-  const shippingFees = 2000;
-  const totalAmount = subtotal + taxAmount + shippingFees;
+    let subtotal = 0;
+    const orderItemsData = dto.items.map((item) => {
+      const product = dbProducts.find((p) => p.id === item.productId)!;
+      subtotal += product.price * item.quantity;
+      return {
+        productId: item.productId,
+        quantity: item.quantity,
+        priceAtPurchase: product.price,
+      };
+    });
 
-  return this.prisma.$transaction(async (tx) => {
-    const order = await tx.order.create({
-      data: {
-        orderNumber: `ORD-${Date.now()}`,
-        userId,
-        totalAmount,
-        taxAmount,
-        shippingFees,
-        shippingAddress: dto.shippingAddress,
-        phoneNumber: dto.phoneNumber,
-        paymentMethod: dto.paymentMethod, // Must match PaymentMethod enum
-        status: 'PENDING',
-        paymentStatus: 'INITIALIZED',
-        items: {
-          create: orderItemsData,
+    const taxAmount = subtotal * 0.18;
+    const shippingFees = 2000;
+    const totalAmount = subtotal + taxAmount + shippingFees;
+
+    return this.prisma.$transaction(async (tx) => {
+      const orderNumber = `ORD-${Date.now()}`;
+      const order = await tx.order.create({
+        data: {
+          orderNumber,
+          userId,
+          totalAmount,
+          taxAmount,
+          shippingFees,
+          shippingAddress: dto.shippingAddress,
+          phoneNumber: dto.phoneNumber,
+          paymentMethod: dto.paymentMethod as PaymentMethod,
+          status: OrderStatus.PENDING,
+          paymentStatus: 'INITIALIZED',
+          items: { create: orderItemsData },
         },
-      },
+      });
+
+      await tx.payment.create({
+        data: {
+          orderId: order.id,
+          userId,
+          amount: totalAmount,
+          transactionRef: `REF-${orderNumber}`,
+          status: 'INITIALIZED',
+          provider: dto.paymentMethod === 'MOBILE_MONEY' ? 'MTN_MOMO' : 'STRIPE',
+        },
+      });
+
+      return order;
     });
+  }
 
-    await tx.payment.create({
-      data: {
-        orderId: order.id,
-        userId,
-        amount: totalAmount,
-        transactionRef: `REF-${order.orderNumber}`,
-        status: 'INITIALIZED',
-        provider: dto.paymentMethod === 'MOBILE_MONEY' ? 'MTN_MOMO' : 'STRIPE',
-      },
-    });
-
-    return order;
-  });
-}
-
-  // --- 1. USER: Get My History ---
+  // --- GET ORDERS BY USER ---
   async getOrdersByUser(userId: string) {
     return this.prisma.order.findMany({
       where: { userId },
@@ -76,29 +78,18 @@ export class OrderService {
     });
   }
 
-  // --- 2. VENDOR: Get My Products in Orders ---
+  // --- GET VENDOR ORDERS ---
   async getOrdersForVendor(vendorId: string) {
     return this.prisma.order.findMany({
-      where: {
-        items: {
-          some: {
-            product: { vendorId: vendorId },
-          },
-        },
-      },
+      where: { items: { some: { product: { vendorId } } } },
       include: {
-        items: {
-          where: {
-            product: { vendorId: vendorId },
-          },
-          include: { product: true },
-        },
+        items: { where: { product: { vendorId } }, include: { product: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  // --- 3. ADMIN: Global Oversight ---
+  // --- GET ALL ORDERS (ADMIN) ---
   async getAllOrders(status?: string) {
     return this.prisma.order.findMany({
       where: status ? { status: status as OrderStatus } : {},
@@ -111,7 +102,7 @@ export class OrderService {
     });
   }
 
-  // --- 4. SHARED: Update Status ---
+  // --- UPDATE ORDER STATUS ---
   async updateStatus(orderId: string, status: OrderStatus) {
     return this.prisma.order.update({
       where: { id: orderId },
@@ -119,7 +110,7 @@ export class OrderService {
     });
   }
 
-  // --- 5. SHARED: Get Single Order Details ---
+  // --- GET SINGLE ORDER ---
   async getOne(id: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },

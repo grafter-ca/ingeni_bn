@@ -5,7 +5,7 @@ import { ShoppingCart, Eye } from "lucide-react";
 import type { ApiProduct } from "../../types/api";
 import { useCartActions } from "../../hooks/useCartActions";
 
-type Props = { product: ApiProduct,isAdmin:string };
+type Props = { product: ApiProduct };
 
 const ProductCard = ({ product }: Props) => {
   const navigate = useNavigate();

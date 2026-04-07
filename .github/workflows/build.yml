@@ -1,0 +1,77 @@
+name: Full CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      DOCKER_USER: ${{ secrets.DOCKER_USER }}
+      DOCKER_PAT: ${{ secrets.DOCKER_PAT }}
+
+    steps:
+      # 1️⃣ Checkout repo
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+
+      # 3️⃣ Install backend dependencies
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      # 4️⃣ Install frontend dependencies
+      - name: Install Frontend Dependencies
+        working-directory: ./src
+        run: npm ci
+
+      # 5️⃣ Run backend tests
+      - name: Run Backend Tests
+        working-directory: ./backend
+        run: npm test
+
+      # 6️⃣ Run frontend tests
+      - name: Run Frontend Tests
+        working-directory: ./src
+        run: npm test
+
+      # 7️⃣ Log in to Docker Hub
+      - name: Docker Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PAT }}
+
+      # 8️⃣ Build backend Docker image
+      - name: Build Backend Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USER }}/backend:latest
+
+      # 9️⃣ Build frontend Docker image
+      - name: Build Frontend Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USER }}/frontend:latest
+
+      # 🔟 Optional: Deploy (example with SSH)
+      #- name: Deploy to Server
+        run: ssh user@server "docker pull ${{ secrets.DOCKER_USER }}/backend:latest && docker pull ${{ secrets.DOCKER_USER }}/frontend:latest && docker-compose up -d"

@@ -44,7 +44,7 @@ export type User = {
   email: string;
   image?: string | null;
   phone?: string;
-  role?: "ADMIN" | "VENDOR" | "USER";
+  role?: "admin" | "vendor" | "user";
   country?: string;
 };
 

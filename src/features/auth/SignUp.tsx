@@ -33,10 +33,10 @@ const Register: React.FC = () => {
       const userRole = user.role?.toLowerCase();
       
       switch (userRole) {
-        case "ADMIN":
+        case "admin":
           navigate("/admin", { replace: true });
           break;
-        case "VENDOR":
+        case "vendor":
           // Vendors go to their specific inventory/onboarding
           navigate("/vendor/inventory", { replace: true });
           break;
@@ -103,7 +103,7 @@ const Register: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-lg mx-auto bg-gray-800 p-8 flex flex-col gap-6 shadow-2xl rounded-xl border border-gray-700">
+      <div className="w-full md:w-100 max-w-125 mx-auto bg-gray-800 p-8 flex flex-col gap-6 shadow-2xl rounded-xl border border-gray-700">
         
         {/* Branding */}
         <header className="flex flex-col items-center text-center gap-2">

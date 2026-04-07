@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useProductStore } from "../../../store/productStore";
-import ProductCard from "../../../pages/admin/component/ProductCard";
+import ProductCard from "../component/ProductCard";
 import { useNavigate } from "react-router-dom";
 import type { ApiProduct } from "../../../types/api";
 import { useAuthState } from "../../../context/AuthContext";
@@ -25,7 +25,7 @@ const AdminProducts: React.FC = () => {
     fetchCategories();
   }, [fetchProducts, fetchCategories]);
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = user?.role === 'admin'
 
   return (
     <div className="space-y-6">

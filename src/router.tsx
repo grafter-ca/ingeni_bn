@@ -20,6 +20,7 @@ import VerifyEmail from "./pages/VerifyEmail";
 import CheckoutPage from "./pages/CheckoutPage";
 import OrderSuccess from "./pages/OrderSuccess";
 import MyOrders from "./pages/MyOrders";
+import AdminProducts from "./pages/admin/products/productsList";
 
 export const router = createBrowserRouter([
   {
@@ -78,12 +79,13 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: (
-          <ProtectedRoute requiredRole="admin">
-            <Admin />
-          </ProtectedRoute>
-        ),
+        element: <Admin />
       },
+      {
+        path: "products",
+        element: <AdminProducts />
+      },
+
       // Admin-specific order management could go here
     ],
   },

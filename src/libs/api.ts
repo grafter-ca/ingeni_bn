@@ -1,47 +1,55 @@
 // src/libs/api.ts
 
 const FAKE_BASE = "https://api.escuelajs.co/api/v1";
-const LOCAL_BASE = "http://localhost:8000"; // Added /api prefix if NestJS uses it
+const LOCAL_BASE = "http://localhost:8000"; // Adjust if your NestJS uses /api prefix
 
-async function baseRequest<T>(baseUrl: string, endpoint: string, options: any = {}): Promise<T> {
+async function baseRequest<T>(
+  baseUrl: string,
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
   const url = `${baseUrl}${endpoint}`;
+
   const response = await fetch(url, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+    body:
+      options.body && typeof options.body !== "string"
+        ? JSON.stringify(options.body)
+        : options.body,
   });
 
-  if (!response.ok) throw new Error(`Failed at ${url}`);
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`Request failed at ${url}: ${errorText || response.statusText}`);
+  }
+
   return response.json();
 }
 
-// ✅ Worker 1: Local
-export const localApiClient = <T>(endpoint: string) => 
-  baseRequest<T>(LOCAL_BASE, endpoint, { credentials: "include" });
-
+// --- Local API Wrapper ---
 export const localApi = {
-  get: <T>(endpoint: string) => 
-    baseRequest<T>(LOCAL_BASE, endpoint, { method: "GET", credentials: "include" }),
+  get: async <T>(endpoint: string, params?: Record<string, any>): Promise<T> => {
+    let url = endpoint;
+    if (params) {
+      const query = new URLSearchParams(params as any).toString();
+      url += `?${query}`;
+    }
+    return baseRequest<T>(LOCAL_BASE, url, { method: "GET", credentials: "include" });
+  },
 
-  post: <T>(endpoint: string, body: any) => 
-    baseRequest<T>(LOCAL_BASE, endpoint, { 
-      method: "POST", 
-      body: JSON.stringify(body), 
-      credentials: "include" 
-    }),
+  post: async <T>(endpoint: string, body?: any): Promise<T> =>
+    baseRequest<T>(LOCAL_BASE, endpoint, { method: "POST", body, credentials: "include" }),
 
-  patch: <T>(endpoint: string, body: any) => 
-    baseRequest<T>(LOCAL_BASE, endpoint, { 
-      method: "PATCH", 
-      body: JSON.stringify(body), 
-      credentials: "include" 
-    }),
+  patch: async <T>(endpoint: string, body?: any): Promise<T> =>
+    baseRequest<T>(LOCAL_BASE, endpoint, { method: "PATCH", body, credentials: "include" }),
 
-  delete: <T>(endpoint: string) => 
+  delete: async <T>(endpoint: string): Promise<T> =>
     baseRequest<T>(LOCAL_BASE, endpoint, { method: "DELETE", credentials: "include" }),
 };
 
-// ✅ Worker 2: Fake
-export const fakeApiClient = <T>(endpoint: string) => 
-  baseRequest<T>(FAKE_BASE, endpoint);
+// --- Fake API Wrapper ---
+export const fakeApiClient = <T>(endpoint: string) => baseRequest<T>(FAKE_BASE, endpoint);
