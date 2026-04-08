@@ -38,7 +38,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 FROM node:24-slim AS node-final
 WORKDIR /app
 
-COPY --from=backend-builder /app/dist ./dist
+COPY --from=backend-builder /app/dist ./backend/dist
 COPY --from=backend-builder /app/node_modules ./node_modules
 COPY --from=backend-builder /app/generated ./generated
 COPY --from=backend-builder /app/prisma ./prisma
@@ -50,4 +50,4 @@ ENV NODE_ENV=production
 ENV PORT=8000
 
 # Start backend
-CMD ["sh", "-c", "npx prisma db push && node dist/main.js"]
+CMD ["sh", "-c", "cd backend && npx prisma db push && node dist/main.js"]
