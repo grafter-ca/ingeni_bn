@@ -191,7 +191,7 @@ const ProductDetail = () => {
                   label={added ? "Added to Cart" : "Add to Cart"}
                   icon={ShoppingCart}
                   onClick={handleAddToCartClick}
-                  className={`w-full py-4 rounded-2xl text-sm font-bold uppercase tracking-widest transition-all ${
+                  className={`w-full py-4 rounded-2xl items-center justify-center border border-gray-600 text-sm font-bold uppercase tracking-widest transition-all ${
                     added ? "bg-green-600 border-green-600" : "bg-transparent border-white/10 hover:bg-white/5"
                   }`}
                 />
@@ -199,7 +199,7 @@ const ProductDetail = () => {
                   label="Buy It Now"
                   icon={Zap}
                   onClick={() => setIsCheckoutOpen(true)}
-                  className="w-full py-4 bg-blue-600 hover:bg-blue-500 border-none rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-600/20"
+                  className="w-full py-4 items-center justify-center bg-blue-600 hover:bg-blue-500 border-none rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-600/20"
                 />
               </div>
             </div>

@@ -1,53 +1,23 @@
-# --- Stage 1: Build Backend ---
-FROM node:24-slim AS backend-builder
-
+# Stage 1: Build the Vite App
+FROM node:24-slim AS builder
 WORKDIR /app
 
-# Install backend dependencies
-COPY backend/package*.json ./
-RUN npm ci --network-timeout=100000
-
-# Copy backend source
-COPY backend/ .
-# Generate Prisma client
-RUN npx prisma generate --schema ./prisma/schema.prisma
-# Build NestJS backend
-RUN npm run build
-
-# --- Stage 2: Build Frontend ---
-FROM node:24-slim AS frontend-builder
-WORKDIR /app
-
-# Install frontend dependencies (root package.json)
+# Install dependencies (cached if package.json doesn't change)
 COPY package*.json ./
 RUN npm ci --network-timeout=100000
 
-# Copy frontend source (root)
+# Copy source and build
 COPY . .
 RUN npm run build
 
-# --- Stage 3: Combine in Nginx + Node Backend ---
-FROM nginx:stable-alpine AS final
+# Stage 2: Serve with Nginx
+FROM nginx:stable-alpine
 
-# Copy frontend build into Nginx
-COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+# Copy the static build from the first stage to Nginx
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy custom Nginx config for React Router support
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy backend build into same container
-# We need Node for NestJS
-FROM node:24-slim AS node-final
-WORKDIR /app
-
-COPY --from=backend-builder /app/dist ./backend/dist
-COPY --from=backend-builder /app/node_modules ./node_modules
-COPY --from=backend-builder /app/generated ./generated
-COPY --from=backend-builder /app/prisma ./prisma
-COPY --from=backend-builder /app/package*.json ./
-
-# Expose backend port
-EXPOSE 8000
-ENV NODE_ENV=production
-ENV PORT=8000
-
-# Start backend
-CMD ["sh", "-c", "cd backend && npx prisma db push && node dist/main.js"]
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,9 +1,9 @@
-import React, { useRef, type Dispatch, type SetStateAction } from "react";
+// import React, { useRef } from "react";
 import Button from "../ui/Button";
 import { Input } from "../ui/Input";
 import type { LoginPayload } from "../../types/api";
 import { Link } from "react-router-dom";
-import HCaptcha from "@hcaptcha/react-hcaptcha";
+// import HCaptcha from "@hcaptcha/react-hcaptcha";
 
 interface LoginFormProps {
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
@@ -11,20 +11,20 @@ interface LoginFormProps {
   error: string | null;
   formData: LoginPayload;
   loading?: boolean;
-setCaptchaToken: Dispatch<SetStateAction<string | undefined>>;
-  onCaptchaChange: (token:string) => void;
+// setCaptchaToken: Dispatch<SetStateAction<string | undefined>>;
+//   onCaptchaChange: (token:string) => void;
 }
 
 
 const LoginForm: React.FC<LoginFormProps> = ({ 
   handleSubmit, 
   handleChange, 
-  onCaptchaChange,
+  // onCaptchaChange,
   error, 
   formData, 
   loading 
 }) => {
-  const captchaRef = useRef<HCaptcha>(null);
+  // const captchaRef = useRef<HCaptcha>(null);
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       <Input
@@ -45,7 +45,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
         required
       />
        
-       <div className="flex justify-center my-4">
+       {/* <div className="flex justify-center my-4">
                    <HCaptcha
                      sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY || "72ca1ee4-305c-4888-a7f2-47ca0c2ef752"}
                      onVerify={onCaptchaChange}
@@ -53,7 +53,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
                       theme="dark"
                   {...(import.meta.env.MODE === "development" ? { disabled: true } : {})}
                    />
-                 </div>
+                 </div> */}
 
       {/* API Error Message */}
       {error && (

@@ -1,5 +1,9 @@
 import { createBrowserRouter } from "react-router-dom";
+// Layouts
 import Layout from "./components/layout/Layout";
+import AdminLayout from "./components/layout/AdminLayout";
+import VendorLayout from "./components/layout/VendorLayout";
+// Public & User Pages
 import Home from "./pages/Home";
 import Products from "./pages/Products";
 import ProductDetail from "./pages/ProductDetail";
@@ -8,21 +12,23 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
-import ProtectedRoute from "./components/common/ProtectedRoute";
-import Admin from "./pages/admin/Admin";
-import AdminLayout from "./components/layout/AdminLayout";
-import VendorLayout from "./components/layout/VendorLayout";
-import Vendor from "./pages/vendor/VendorPage";
-import Inventory from "./pages/vendor/Inventory";
+import Unauthorized from "./pages/Unauthorized";
 import VerifyEmail from "./pages/VerifyEmail";
-
-// New Order-Related Pages
 import CheckoutPage from "./pages/CheckoutPage";
 import OrderSuccess from "./pages/OrderSuccess";
 import MyOrders from "./pages/MyOrders";
+// Admin & Vendor Pages
+import Admin from "./pages/admin/Admin";
 import AdminProducts from "./pages/admin/products/productsList";
+import Vendor from "./pages/vendor/VendorPage";
+import Inventory from "./pages/vendor/Inventory";
+// Security
+import ProtectedRoute from "./components/common/ProtectedRoute";
+import AdminCategories from "./pages/admin/category/AdminCategories";
+import AdminUserPage from "./pages/admin/users/AdminUserpage";
 
 export const router = createBrowserRouter([
+  // --- 1. MAIN PUBLIC & CUSTOMER ROUTES ---
   {
     path: "/",
     element: <Layout />,
@@ -34,93 +40,58 @@ export const router = createBrowserRouter([
       { path: "login", element: <Login /> },
       { path: "register", element: <Register /> },
       { path: "verify-email", element: <VerifyEmail /> },
+      { path: "unauthorized", element: <Unauthorized /> },
+      { path: "cart", element: <Cart /> },
 
-      // --- USER PROTECTED ROUTES ---
+      // --- USER PROTECTED SECTION ---
+      // We wrap these in a ProtectedRoute without a role (defaults to 'user')
+
       {
-        path: "cart",
-        element: (
-          <ProtectedRoute>
-            <Cart />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: "checkout",
-        element: (
-          <ProtectedRoute>
-            <CheckoutPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: "order-success/:orderNumber",
-        element: (
-          <ProtectedRoute>
-            <OrderSuccess />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: "my-orders",
-        element: (
-          <ProtectedRoute>
-            <MyOrders />
-          </ProtectedRoute>
-        ),
+        element: <ProtectedRoute />, 
+        children: [
+          { path: "checkout", element: <CheckoutPage /> },
+          { path: "order-success/:orderNumber", element: <OrderSuccess /> },
+          { path: "my-orders", element: <MyOrders /> },
+        ],
       },
       { path: "*", element: <NotFound /> },
     ],
   },
 
-  // --- ADMIN ROUTES ---
+  // --- 2. ADMIN PROTECTED ROUTES ---
   {
     path: "/admin",
-    element: <AdminLayout />,
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <AdminLayout />
+      </ProtectedRoute>
+    ),
     children: [
-      {
-        index: true,
-        element: <Admin />
-      },
-      {
-        path: "products",
-        element: <AdminProducts />
-      },
-
-      // Admin-specific order management could go here
+      { index: true, element: <Admin /> },
+      { path: "products", element: <AdminProducts /> },
+      { path: "categories", element: <AdminCategories /> }, // Add your Category list here
+      { path: "users", element: <AdminUserPage /> },
     ],
   },
 
-  // --- VENDOR ROUTES ---
+  // --- 3. VENDOR PROTECTED ROUTES ---
   {
     path: "/vendor",
-    element: <VendorLayout />,
+    element: (
+      <ProtectedRoute requiredRole="vendor">
+        <VendorLayout />
+      </ProtectedRoute>
+    ),
     children: [
-      {
-        index: true,
-        element: (
-          <ProtectedRoute requiredRole="vendor">
-            <Vendor />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: "inventory",
-        element: (
-          <ProtectedRoute requiredRole="vendor">
-            <Inventory />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: "orders",
-        element: (
-          <ProtectedRoute requiredRole="vendor">
-            {/* Component to see orders containing vendor products */}
-            <div className="text-white">Vendor Order Management</div>
-          </ProtectedRoute>
-        ),
+      { index: true, element: <Vendor /> },
+      { path: "inventory", element: <Inventory /> },
+      { 
+        path: "orders", 
+        element: <div className="p-6">Vendor Order Management</div> 
       },
     ],
   },
+
+  // Catch-all for top-level routes
   { path: "*", element: <NotFound /> },
 ]);

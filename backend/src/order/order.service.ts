@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { OrderStatus, PaymentMethod } from '../../generated/prisma/client.js';
 import type { CreateOrderDto } from './dto/create-order.dto.js';
@@ -19,22 +19,32 @@ export class OrderService {
     }
 
     let subtotal = 0;
+
+    // We map the data and handle the Decimal -> Number conversion for math
     const orderItemsData = dto.items.map((item) => {
       const product = dbProducts.find((p) => p.id === item.productId)!;
-      subtotal += product.price * item.quantity;
+      
+      // FIX 1: Convert Decimal price to Number for arithmetic
+      const price = Number(product.price);
+      subtotal += price * item.quantity;
+
       return {
-        productId: item.productId,
         quantity: item.quantity,
-        priceAtPurchase: product.price,
+        priceAtPurchase: product.price, // Keep as Decimal for DB storage
+        // FIX 2: Use the relational 'connect' syntax to satisfy Prisma types
+        product: {
+          connect: { id: item.productId }
+        }
       };
     });
 
-    const taxAmount = subtotal * 0.18;
-    const shippingFees = 2000;
+    const taxAmount = subtotal * 0.18; // 18% VAT (RRA Standard)
+    const shippingFees = 2000; // Fixed delivery fee for Ingeri Store
     const totalAmount = subtotal + taxAmount + shippingFees;
 
     return this.prisma.$transaction(async (tx) => {
       const orderNumber = `ORD-${Date.now()}`;
+      
       const order = await tx.order.create({
         data: {
           orderNumber,
@@ -47,7 +57,9 @@ export class OrderService {
           paymentMethod: dto.paymentMethod as PaymentMethod,
           status: OrderStatus.PENDING,
           paymentStatus: 'INITIALIZED',
-          items: { create: orderItemsData },
+          items: {
+            create: orderItemsData,
+          },
         },
       });
 
@@ -71,7 +83,7 @@ export class OrderService {
     return this.prisma.order.findMany({
       where: { userId },
       include: {
-        items: { include: { product: true } },
+        items: { include: { product: { include: { images: true } } } },
         payment: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -83,7 +95,10 @@ export class OrderService {
     return this.prisma.order.findMany({
       where: { items: { some: { product: { vendorId } } } },
       include: {
-        items: { where: { product: { vendorId } }, include: { product: true } },
+        items: { 
+          where: { product: { vendorId } }, 
+          include: { product: { include: { images: true } } } 
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -95,7 +110,7 @@ export class OrderService {
       where: status ? { status: status as OrderStatus } : {},
       include: {
         user: { select: { name: true, email: true } },
-        items: { include: { product: true } },
+        items: { include: { product: { include: { images: true } } } },
         payment: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -115,7 +130,7 @@ export class OrderService {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
-        items: { include: { product: true } },
+        items: { include: { product: { include: { images: true } } } },
         payment: true,
         user: { select: { name: true, phone: true, email: true } },
       },

@@ -11,28 +11,48 @@ const Login: React.FC = () => {
   const { user, isLoading, error } = useAuthState();
   const { login } = useAuthActions();
 
-  // Fix: Initialize state properly
-  const [captchaToken, setCaptchaToken] = useState<string | undefined>();
-   
+  // const [captchaToken, setCaptchaToken] = useState<string | undefined>();
   const [formData, setFormData] = useState<LoginPayload>({
     email: "",
     password: "",
   });
 
-  useEffect(() => {
-    if (user) {
-      const from = (location.state as any)?.from?.pathname || "/products";
-      navigate(from, { replace: true });
+ useEffect(() => {
+    if (user && !isLoading) {
+      // 1. Check if the user was trying to access a specific guarded route
+      const from = (location.state as any)?.from?.pathname;
+      
+      if (from) {
+        navigate(from, { replace: true });
+        return;
+      }
+
+      const userRole = user.role?.toLowerCase();
+
+      console.log("Auth success. Role detected:", userRole);
+
+      switch (userRole) {
+        case "admin":
+          navigate("/admin", { replace: true });
+          break;
+        case "vendor":
+          navigate("/vendor/inventory", { replace: true });
+          break;
+        case "user":
+        default:
+          navigate("/products", { replace: true });
+          break;
+      }
     }
-  }, [user, navigate, location]);
+  }, [user, isLoading, navigate, location]);
 
   const handleChange = useCallback((field: keyof LoginPayload, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  const onCaptchaChange = (token: string) => {
-    setCaptchaToken(token);
-  };
+  // const onCaptchaChange = (token: string) => {
+  //   setCaptchaToken(token);
+  // };
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -40,44 +60,21 @@ const Login: React.FC = () => {
       
       if (!formData.email || !formData.password) return;
 
-      if (!captchaToken) {
-        alert("Please complete the captcha.");
-        return;
-      }
+      // if (!captchaToken) {
+      //   alert("Please complete the captcha.");
+      //   return;
+      // }
 
       try {
-        await login(formData, captchaToken);
-        // Better-Auth handles session
-
-         useEffect(() => {
-           if (user) {
-             const userRole = user.role;
-             console.log("user role from login",userRole)
-             
-             switch (userRole) {
-               case "admin":
-                 navigate("/admin", { replace: true });
-                 break;
-               case "vendor":
-                 // Vendors go to their specific inventory/onboarding
-                 navigate("/vendor/inventory", { replace: true });
-                 break;
-               default:
-                 navigate("/products", { replace: true });
-                 break;
-             }
-           }
-         }, [user, navigate]);
-       
-
-
+        // We only call login here. 
+        await login(formData);
       } catch (err) {
-        setCaptchaToken(undefined);
-        // Note: The child component's HCaptcha ref would need to be reset here 
-        // if you want to force a visual refresh of the widget on error.
+        // Reset captcha on failure to force user to re-verify
+        // setCaptchaToken(undefined);
+        console.error("Login attempt failed:", err);
       }
     },
-    [formData, login, captchaToken]
+    [formData, login]
   );
 
   return (
@@ -87,15 +84,15 @@ const Login: React.FC = () => {
           <img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" />
           <h1 className="font-poppins font-bold text-2xl text-white">Welcome Back</h1>
           <p className="font-poppins text-xs text-gray-400 uppercase tracking-widest">
-            {user ? `Signed in as ${user.role}` : "Secure Member Login"}
+            {user ? `Signed in as ${user.role}` : "Secure Login"}
           </p>
         </header>
 
         <LoginForm
           handleSubmit={handleSubmit}
           handleChange={handleChange}
-          setCaptchaToken={setCaptchaToken} // Passing the function, not a string
-          onCaptchaChange={onCaptchaChange}
+          // setCaptchaToken={setCaptchaToken}
+          // onCaptchaChange={onCaptchaChange}
           error={error}
           formData={formData}
           loading={isLoading}

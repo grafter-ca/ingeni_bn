@@ -7,7 +7,6 @@ import type { RegisterPayloadProps } from "../../types/api";
 const Register: React.FC = () => {
   const navigate = useNavigate();
   
-  // 1. Destructure from the updated context hooks
   const { user, isLoading, error } = useAuthState();
   const { register } = useAuthActions();
 
@@ -16,36 +15,36 @@ const Register: React.FC = () => {
     email: "",
     password: "",
     country: "",
-    phone: "",
-    storeName: "",
+    phone: ""
   });
 
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   /**
-   * SEAMLESS REDIRECT LOGIC
-   * Watches the 'user' state. As soon as Better-Auth logs them in, 
-   * we push them to the correct dashboard based on their role.
+   * CENTRAL REDIRECT LOGIC
+   * Once 'register' succeeds, Better-Auth updates the session.
+   * This effect detects the new 'user' and sends them to the right place.
    */
   useEffect(() => {
-    if (user) {
+    if (user && !isLoading) {
       const userRole = user.role?.toLowerCase();
+      console.log("Registration successful. Role detected:", userRole);
       
       switch (userRole) {
         case "admin":
           navigate("/admin", { replace: true });
           break;
         case "vendor":
-          // Vendors go to their specific inventory/onboarding
           navigate("/vendor/inventory", { replace: true });
           break;
+        case "user":
         default:
           navigate("/products", { replace: true });
           break;
       }
     }
-  }, [user, navigate]);
+  }, [user, isLoading, navigate]);
 
   /**
    * FIELD CHANGE HANDLER
@@ -54,7 +53,6 @@ const Register: React.FC = () => {
     (field: keyof RegisterPayloadProps, value: string) => {
       setFormData((prev) => ({ ...prev, [field]: value }));
       
-      // Clear local validation errors when user starts fixing the field
       if (localError) setLocalError(null);
     },
     [localError]
@@ -67,7 +65,7 @@ const Register: React.FC = () => {
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
 
-      // 2. Comprehensive Local Validations
+      // Local Validations
       if (!formData.name || !formData.email || !formData.password) {
         setLocalError("Please fill in all required fields.");
         return;
@@ -88,10 +86,11 @@ const Register: React.FC = () => {
         return;
       }
 
-      // 3. Clear local errors and trigger Context Register
       setLocalError(null);
       
       try {
+        // After this call, 'user' state in context will update,
+        // triggering the useEffect above.
         await register(formData);
       } catch (err) {
         console.error("Registration flow failed:", err);
@@ -100,27 +99,23 @@ const Register: React.FC = () => {
     [formData, confirmPassword, register]
   );
 
-
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-8">
       <div className="w-full md:w-100 max-w-125 mx-auto bg-gray-800 p-8 flex flex-col gap-6 shadow-2xl rounded-xl border border-gray-700">
         
-        {/* Branding */}
         <header className="flex flex-col items-center text-center gap-2">
           <img src="/logo.png" className="w-16 h-16 object-contain" alt="Ingeri Logo" />
           <h1 className="text-2xl font-bold text-white tracking-tight font-poppins">
             Join Ingeri
           </h1>
           <p className="text-xs text-gray-400 uppercase tracking-widest font-poppins">
-            {formData.role === "VENDOR" ? "Setup your vendor store" : "Create your account today"}
+            Create your account today
           </p>
         </header>
 
-        {/* The Register Form Component */}
         <RegisterForm
           handleSubmit={handleSubmit}
           handleChange={handleChange}
-          // Display local validation errors first, then API errors from context
           error={localError || error} 
           formData={formData}
           loading={isLoading}
@@ -128,7 +123,6 @@ const Register: React.FC = () => {
           setConfirmPassword={setConfirmPassword}
         />
 
-        {/* Footer Links */}
         <footer className="flex flex-col gap-4">
           <p className="font-poppins text-gray-400 text-xs text-center">
             Already have an account?{" "}

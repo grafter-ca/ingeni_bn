@@ -22,29 +22,29 @@ const Inventory = () => {
   }, []);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+    <section className="space-y-8 animate-in fade-in duration-500">
+      <article className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <header>
           <h1 className="text-3xl font-bold">Inventory</h1>
           <p className="text-gray-500 text-sm">Manage your product catalog and stock levels.</p>
-        </div>
+        </header>
         <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all w-fit">
           <Plus size={20} />
           {loading ? 'Loading...' : 'Add New Product'} 
         </button>
-      </div>
+      </article>
 
       {/* Search and Filters */}
-      <div className="relative">
+      <section className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
         <input 
           placeholder="Search products..." 
           className="w-full bg-[#0a0a0a] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm focus:border-blue-500 outline-none"
         />
-      </div>
+      </section>
 
       {/* Product Table */}
-      <div className="bg-[#0a0a0a] border border-white/5 rounded-4xl overflow-hidden">
+      <section className="bg-[#0a0a0a] border border-white/5 rounded-4xl overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="text-gray-500 text-xs uppercase tracking-widest border-b border-white/5">
@@ -84,8 +84,8 @@ const Inventory = () => {
             )}
           </tbody>
         </table>
-      </div>
-    </div>
+      </section>
+    </section>
   );
 };
 

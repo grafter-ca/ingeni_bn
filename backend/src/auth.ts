@@ -4,7 +4,7 @@ import {
   admin,
   organization,
   multiSession,
-  captcha,
+  // captcha,
   haveIBeenPwned,
   lastLoginMethod,
 } from "better-auth/plugins";
@@ -130,11 +130,13 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
         allowUserToCreateOrganization: true,
       }),
       multiSession(),
-      captcha({
-        provider: "hcaptcha",
-        secretKey: process.env.HCAPTCHA_SECRET_KEY!,
-        endpoints: ["/sign-in/email"],
-      }),
+      // ...(process.env.NODE_ENV !== 'production' ? [] : [
+      //   captcha({
+      //   provider: "hcaptcha",
+      //   secretKey: process.env.HCAPTCHA_SECRET_KEY!,
+      //   endpoints: ["/sign-in/email"],
+      // }),]),
+      
       haveIBeenPwned(),
       lastLoginMethod(),
     ],

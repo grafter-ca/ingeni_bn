@@ -1,135 +1,189 @@
 import { create } from "zustand";
 import { productService } from "../services/productService";
-import type { ProductState, ProductFilters } from "../types/api";
+import type { ApiCategory, ApiProduct } from "../types/api";
 
-export const useProductStore = create<ProductState>()((set, get) => ({
+interface ProductState {
+  // Data State
+  products: ApiProduct[];
+  filteredProducts: ApiProduct[];
+  categories: ApiCategory[];
+  isLoading: boolean;
+  error: string | null;
+
+  // Form/Modal State
+  isEditing: ApiProduct | null;
+  // UI Note: images is a string in the form (for comma-parsing) but string[] in the API
+  formData: Omit<ApiProduct, "id" | "category" | "origin" | "images"> & { images: string };
+
+  // Methods
+  fetchProducts: (params?: any) => Promise<void>;
+  fetchCategories: () => Promise<void>;
+  setFilteredProducts: (products: ApiProduct[]) => void;
+  updateFormData: (data: Partial<ProductState["formData"]>) => void;
+  setEditingProduct: (product: ApiProduct | null) => void;
+  
+  // CRUD Actions
+  addProduct: (vendorId: string) => Promise<void>;
+  updateProduct: (id: string) => Promise<void>;
+  removeProduct: (id: string) => Promise<void>;
+}
+
+export const useProductStore = create<ProductState>((set, get) => ({
+  // --- INITIAL STATE ---
   products: [],
   filteredProducts: [],
   categories: [],
-  currentProduct: null,
-  selectedCategory: null,
-  searchQuery: "",
   isLoading: false,
-  isFetchingMore: false, // Added missing state
   error: null,
+  isEditing: null,
+  formData: {
+    title: "",
+    stock: 0,
+    price: 0,
+    description: "",
+    images: "", // Initialized as empty string for the comma-separated input
+    categoryId: "",
+    vendorId: "",
+  },
 
-  // 1. Initial Load (Aggregated)
-  fetchProducts: async (filters: ProductFilters = {}) => {
+  // --- DATA FETCHING ---
+  fetchProducts: async (params) => {
     set({ isLoading: true, error: null });
     try {
-      // Ensure we explicitly ask for more than 8
-      const limit = filters.limit || 40; 
-      const data = await productService.getProducts({ ...filters, limit });
+      const data = await productService.getProducts(params);
+      
+      // Sanitize incoming data: Ensure images are always string[]
+      const sanitizedData = data.map((p: any) => ({
+        ...p,
+        images: Array.isArray(p.images) && typeof p.images[0] === 'object' 
+          ? p.images.map((img: any) => img.url) 
+          : p.images
+      }));
       
       set({ 
-        products: data, 
-        filteredProducts: data, 
+        products: sanitizedData, 
+        filteredProducts: sanitizedData, 
         isLoading: false 
       });
     } catch (err) {
-      set({ error: "Failed to sync inventory", isLoading: false });
+      set({ error: "Failed to fetch inventory", isLoading: false });
     }
   },
 
-  // 2. Load More (Crucial for fixing the "Only 8" issue)
-  fetchMoreProducts: async () => {
-    const { products, selectedCategory, isFetchingMore } = get();
-    if (isFetchingMore) return;
-
-    set({ isFetchingMore: true });
-    try {
-      const moreData = await productService.getProducts({
-        offset: products.length,
-        categoryName: selectedCategory || undefined,
-        limit: 20
-      });
-
-      const updatedProducts = [...products, ...moreData];
-      set({
-        products: updatedProducts,
-        filteredProducts: updatedProducts,
-        isFetchingMore: false
-      });
-    } catch (err) {
-      set({ isFetchingMore: false });
-    }
-  },
-
-  // 3. Single Product Fetch
-  fetchProductById: async (id: number | string) => {
-    set({ isLoading: true, currentProduct: null });
-    try {
-      const product = await productService.getProduct(id);
-      set({ currentProduct: product, isLoading: false });
-    } catch (err) {
-      set({ error: "Product not found", isLoading: false });
-    }
-  },
-
-  // 4. Category Sync
   fetchCategories: async () => {
     try {
-      const categories = await productService.getCategories();
-      set({ categories });
+      const data = await productService.getCategories();
+      set({ categories: data });
     } catch (err) {
-      console.error("Category Sync Error", err);
+      console.error("Category fetch error:", err);
     }
   },
 
-  // 5. Lookups
-  getCategoryById: (id) => {
-    return get().categories.find((cat) => String(cat.id) === String(id));
+  // --- FILTERING ---
+  setFilteredProducts: (products) => set({ filteredProducts: products }),
+
+  // --- FORM MANAGEMENT ---
+  updateFormData: (data) =>
+    set((state) => ({ formData: { ...state.formData, ...data } })),
+
+  setEditingProduct: (product) => {
+    if (product) {
+      set({
+        isEditing: product,
+        formData: {
+          title: product.title,
+          stock: product.stock,
+          price: product.price,
+          description: product.description,
+          // Convert string[] from API to comma-separated string for the UI input
+          images: Array.isArray(product.images) ? product.images.join(", ") : "",
+          categoryId: product.categoryId,
+          vendorId: product.vendorId,
+        },
+      });
+    } else {
+      set({
+        isEditing: null,
+        formData: { 
+          title: "", 
+          stock: 0, 
+          price: 0, 
+          description: "", 
+          images: "", 
+          categoryId: "", 
+          vendorId: "" 
+        },
+      });
+    }
   },
 
-  getLocalProductById: (id) => {
-    return get().products.find((p) => String(p.id) === String(id));
-  },
-
-  // 6. Search & Filters
-  setSearchQuery: (query: string) => {
-    const { products, selectedCategory } = get();
-    const lowerQuery = query.toLowerCase();
+  // --- CRUD OPERATIONS ---
+  addProduct: async (vendorId: string) => {
+    const { formData, fetchProducts } = get();
     
-    let filtered = products.filter((p) =>
-      p.title.toLowerCase().includes(lowerQuery) ||
-      p.description.toLowerCase().includes(lowerQuery)
-    );
+    if (!formData.title?.trim()) throw new Error("Title is required");
 
-    if (selectedCategory) {
-      filtered = filtered.filter((p) => String(p.category.id) === String(selectedCategory));
+    set({ isLoading: true });
+    try {
+      const payload = {
+        ...formData,
+        vendorId,
+        price: Number(formData.price),
+        stock: Number(formData.stock),
+        // PARSE: Convert the UI string back into a clean string[] for the backend
+        images: formData.images
+          .split(",")
+          .map((url) => url.trim())
+          .filter((url) => url !== ""),
+      };
+
+      await productService.createProduct(payload);
+      set({ isEditing: null, isLoading: false });
+      await fetchProducts({ vendorId });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
     }
-
-    set({ searchQuery: query, filteredProducts: filtered });
   },
 
-setCategory: async (categoryName: string | null, shouldFetch = false) => {
-  set({ selectedCategory: categoryName });
-  
-  if (shouldFetch && categoryName !== null) {
-    // Fetch fresh data using the string name
-    await get().fetchProducts({ title: categoryName }); 
-    // Note: If your backend supports a specific 'category' query, use that instead of 'title'
-  } else {
-    const { products, searchQuery } = get();
-    
-    // Local Filter by Name (Case-insensitive)
-    let filtered = categoryName 
-      ? products.filter((p) => 
-          p.category.name.toLowerCase() === categoryName.toLowerCase()
-        ) 
-      : products;
+  updateProduct: async (id: string) => {
+    const { formData, fetchProducts, isEditing } = get();
+    set({ isLoading: true });
+    try {
+      const payload = {
+        ...formData,
+        price: Number(formData.price),
+        stock: Number(formData.stock),
+        // PARSE: Convert the UI string back into a clean string[] for the backend
+        images: formData.images
+          .split(",")
+          .map((url) => url.trim())
+          .filter((url) => url !== ""),
+      };
 
-    if (searchQuery) {
-      filtered = filtered.filter((p) => 
-        p.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      await productService.updateProduct(id, payload);
+      set({ isEditing: null, isLoading: false });
+      await fetchProducts({ vendorId: isEditing?.vendorId });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
     }
-    set({ filteredProducts: filtered });
-  }
-},
+  },
 
-  clearFilters: () => {
-    const { products } = get();
-    set({ searchQuery: "", selectedCategory: null, filteredProducts: products });
+  removeProduct: async (id: string) => {
+    const { fetchProducts, products } = get();
+    const productToDelete = products.find((p) => p.id === id);
+    const vId = productToDelete?.vendorId;
+
+    set({ isLoading: true });
+    try {
+      await productService.deleteProduct(id);
+      await fetchProducts({ vendorId: vId });
+    } catch (err) {
+      set({ error: "Failed to delete product", isLoading: false });
+      throw err;
+    } finally {
+      set({ isLoading: false });
+    }
   },
 }));

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 
 export type Stats = {
   users: number;
@@ -7,5 +8,8 @@ export type Stats = {
 
 export type StatCardProps = {
   title: string;
-  value: number;
+  value: number | string;
+  icon: ReactNode;
+  color: string;
 };
+

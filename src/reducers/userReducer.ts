@@ -1,27 +1,55 @@
-import type { AuthState, AuthAction } from "../types";
+import type { User } from "../types";
 
-// Open for extension (new action types) closed for modification
+export interface AuthState {
+  user: User | null;
+  isAuthenticated: boolean; // Added this
+  isLoading: boolean;
+  error: string | null;
+}
+
 export const initialAuthState: AuthState = {
   user: null,
-  isLoading: false,
+  isAuthenticated: false,
+  isLoading: true, // Start as true while checking session
   error: null,
 };
 
-export const authReducer = (
-  state: AuthState,
-  action: AuthAction
-): AuthState => {
+export type AuthAction =
+  | { type: "LOGIN_START" }
+  | { type: "LOGIN_SUCCESS"; payload: User }
+  | { type: "LOGIN_ERROR"; payload: string }
+  | { type: "LOGOUT" }
+  | { type: "UPDATE_USER"; payload: Partial<User> };
+
+export const authReducer = (state: AuthState, action: AuthAction): AuthState => {
   switch (action.type) {
     case "LOGIN_START":
       return { ...state, isLoading: true, error: null };
     case "LOGIN_SUCCESS":
-      return { ...state, isLoading: false, user: action.payload, error: null };
+      return {
+        ...state,
+        user: action.payload,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      };
     case "LOGIN_ERROR":
-      return { ...state, isLoading: false, error: action.payload };
+      return {
+        ...state,
+        isLoading: false,
+        error: action.payload,
+        isAuthenticated: false,
+      };
     case "LOGOUT":
-      return { ...initialAuthState };
-    case "CLEAR_ERROR":
-      return { ...state, error: null };
+      return {
+        ...initialAuthState,
+        isLoading: false,
+      };
+    case "UPDATE_USER":
+      return {
+        ...state,
+        user: state.user ? { ...state.user, ...action.payload } : null,
+      };
     default:
       return state;
   }

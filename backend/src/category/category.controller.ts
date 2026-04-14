@@ -1,25 +1,65 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Patch, 
+  Delete, 
+  Body, 
+  Param, 
+  UseGuards, 
+  UseInterceptors, 
+  UploadedFile 
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CategoryService } from './category.service.js';
-import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
-import { string } from 'better-auth';
+import { AllowAnonymous, Roles } from '@thallesp/nestjs-better-auth';
+import { RolesGuard } from '../auth/guards/roles.guard.js';
 
-@Controller('categories') // Changed to plural to match frontend calls
+@Controller('categories')
+@UseGuards(RolesGuard)
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
-  // Used for the Sidebar and CategoryShowcase
   @Get()
   @AllowAnonymous()
   async getAll() {
     return this.categoryService.findAll();
   }
 
-  // Used when clicking a specific category to see its details/products
-  @Get(':id')
-  @AllowAnonymous()
-  async getOne(@Param('id') id: string) {
-    // If your frontend sends "local-1", we strip the prefix
-    const cleanId = id.replace('local-', '');
-    return this.categoryService.findOne(cleanId);
+  /**
+   * POST /categories
+   * Handles single image upload for a new category
+   */
+  @Post()
+  @Roles(['admin'])
+  @UseInterceptors(FileInterceptor('image')) // 'image' is the key the frontend must use in FormData
+  async create(
+    @Body() data: any, 
+    @UploadedFile() file: Express.Multer.File // This matches the type fix we did earlier
+  ) {
+    return this.categoryService.create(data, file);
+  }
+
+  /**
+   * PATCH /categories/:id
+   * Allows updating category text or replacing the single image
+   */
+  @Patch(':id')
+  @Roles(['admin'])
+  @UseInterceptors(FileInterceptor('image'))
+  async update(
+    @Param('id') id: string, 
+    @Body() data: any,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    const cleanId = id.replace('local-', '').replace('fake-', '');
+    return this.categoryService.update(cleanId, data, file);
+  }
+
+  @Delete(':id')
+  @Roles(['admin'])
+  async remove(@Param('id') id: string) {
+    const cleanId = id.replace('local-', '').replace('fake-', '');
+    return this.categoryService.remove(cleanId);
   }
 }

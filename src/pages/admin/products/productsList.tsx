@@ -1,79 +1,59 @@
 import { useEffect } from "react";
 import { useProductStore } from "../../../store/productStore";
-import ProductCard from "../component/ProductCard";
-import { useNavigate } from "react-router-dom";
-import type { ApiProduct } from "../../../types/api";
+import { useCategoryStore } from "../../../store/categoryStore";
+import { ProductTable } from "../../../features/admin/product/ProductTable";
+import { ProductForm } from "../../../features/admin/product/CreateEditProduct";
+import { ProductFilters } from "../../../features/admin/product/ProductFilters";
+import { Loader2, PackagePlus } from "lucide-react";
 import { useAuthState } from "../../../context/AuthContext";
 
-const AdminProducts: React.FC = () => {
-  const {
-    filteredProducts,
-    fetchProducts,
-    fetchCategories,
-    setSearchQuery,
-    setCategory,
-    searchQuery,
-    categories,
-  } = useProductStore();
-
-  const {user} = useAuthState();
-
-  const navigate = useNavigate();
+export default function AdminProducts() {
+  const { fetchProducts, isLoading, isEditing, setEditingProduct } = useProductStore();
+  const { fetchCategories } = useCategoryStore();
 
   useEffect(() => {
     fetchProducts();
     fetchCategories();
-  }, [fetchProducts, fetchCategories]);
+  }, []);
 
-  const isAdmin = user?.role === 'admin'
+  const { user } = useAuthState()
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Products</h1>
-        <button
-          onClick={() => navigate("/admin/products/new")}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          + New Product
-        </button>
+    <div className="p-2 max-w-6xl mx-auto min-h-screen">
+      <div className="lg:flex lg:space-y-0  space-y-4 justify-between items-end mb-8">
+        <div className="space-y-1">
+          <h1 className="text-3xl uppercase font-bold text-gray-600">Inventory</h1>
+          <h1 className="text-sm capitalize italic font-light text-green-500">{user?.name}</h1>
+          <p className="text-gray-500">Manage your Rwanda Marketplace listings.</p> 
+        </div>
+        {!isEditing && (
+          <button 
+            onClick={() => setEditingProduct(null)} 
+            className="flex items-center gap-2 bg-green-500/50 text-white px-5 py-2.5 rounded-xl hover:bg-green-500/40 cursor-pointer transition-all"
+          >
+            <PackagePlus size={18} /> Add New Product
+          </button>
+        )}
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4">
-        <input
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search..."
-          className="border px-3 py-2 rounded w-full"
-        />
+      {isEditing !== null || useProductStore.getState().formData.title !== "" ? (
+        <div className="mb-10">
+          <ProductForm />
+        </div>
+      ) : null}
 
-        <select
-          onChange={(e) => setCategory(e.target.value || null)}
-          className="border px-3 py-2 rounded"
-        >
-          <option value="">All</option>
-          {categories.map((cat: any) => (
-            <option key={cat.id} value={cat.name}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <ProductFilters />
 
-      {/* Product Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {filteredProducts.map((product: ApiProduct) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            isAdmin={isAdmin}
-          />
-        ))}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {isLoading ? (
+          <div className="p-20 flex flex-col items-center justify-center text-gray-400">
+            <Loader2 className="animate-spin mb-2" size={40} />
+            <p>Loading inventory...</p>
+          </div>
+        ) : (
+          <ProductTable />
+        )}
       </div>
     </div>
   );
-};
-
-export default AdminProducts;
+}

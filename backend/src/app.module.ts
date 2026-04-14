@@ -9,16 +9,11 @@ import { UserModule } from './user/user.module.js';
 import { CategoryModule } from './category/category.module.js';
 import { OrderService } from './order/order.service.js';
 import { OrderModule } from './order/order.module.js';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
+import { CloudinaryModule } from './libs/cloudinary/cloudinary.module.js';
 
 @Module({
   imports: [
     PrismaModule,
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '../../dist'), // frontend build folder
-      exclude: ['/api*'], // do not override API routes
-    }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -36,6 +31,7 @@ import { join } from 'path';
     UserModule,
     CategoryModule,
     OrderModule,
+    CloudinaryModule
   ],
   controllers: [],
   providers: [OrderService],

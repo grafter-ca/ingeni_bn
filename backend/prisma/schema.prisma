@@ -92,23 +92,32 @@ model Category {
 }
 
 model Product {
-  id          String      @id @default(cuid())
+  id          String         @id @default(cuid())
   title       String
-  price       Float
-  description String
-  images      String[]    
+  slug        String         @unique // For nice URLs
+  price       Decimal        @db.Decimal(10, 2) // More precise than Float
+  description String         @db.Text // Ensures long descriptions don't get cut off
+  stock       Int            @default(0) // Inventory management
+  isActive    Boolean        @default(true) // Quick toggle for availability
   
-  category    Category    @relation(fields: [categoryId], references: [id])
+  images      ProductImage[] 
+  category    Category       @relation(fields: [categoryId], references: [id])
   categoryId  String      
-  
   orderItems  OrderItem[] 
-  
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  vendorId  String
-  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+  vendorId    String
+  vendor      Vendor         @relation(fields: [vendorId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@map("product")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  url       String
+  alt       String? // Better for accessibility
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
 }
 
 // --- BETTER-AUTH REQUIRED MODELS ---
@@ -239,7 +248,7 @@ model OrderItem {
   product         Product  @relation(fields: [productId], references: [id])
   
   quantity        Int
-  priceAtPurchase Float
+  priceAtPurchase Decimal  @db.Decimal(10, 2)
 
   @@map("order_item")
 }

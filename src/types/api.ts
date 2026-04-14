@@ -1,12 +1,15 @@
-// Product types
 export type ApiProduct = {
-  id: string; // Adjusted to string for merged products
-  origin?: "local" | "fake"; // Optional field to track source
+  id: string;
+  origin?: "local" | "fake";
   title: string;
+  stock: number;
+  isActive?:boolean;
   price: number;
   description: string;
-  images: string[];
+  images: string[]; // This is the key: a flat array of URLs
   category: ApiCategory;
+  categoryId: string;
+  vendorId?: string;
 };
 
 export type ApiCategory = {
@@ -14,6 +17,8 @@ export type ApiCategory = {
   name: string;
   image: string;
 };
+
+export type UserRole = "user" | "admin" | "vendor"
 
 // Auth types
 export type ApiUser = {
@@ -57,6 +62,7 @@ export type ProductFilters = {
   price_max?: number;
   offset?: number;
   limit?: number;
+  vendorId?:string;
 };
 
 export type ProductState = {

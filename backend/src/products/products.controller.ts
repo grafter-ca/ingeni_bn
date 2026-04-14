@@ -1,11 +1,11 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Param, 
-  Patch, 
-  Delete, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Patch,
+  Delete,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,10 +18,6 @@ import { RolesGuard } from '../auth/guards/roles.guard.js';
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
-  /**
-   * GET /api/products
-   * Supports: ?categoryId=X&limit=Y&offset=Z&title=abc
-   */
   @Get()
   @AllowAnonymous()
   async getAll(
@@ -30,12 +26,6 @@ export class ProductsController {
     @Query('offset') offset?: string,
     @Query('title') title?: string,
   ) {
-    if (!categoryName){
-      return this.productsService.findAll({
-    limit: limit ? Number(limit) : 20, offset: offset ? Number(offset) : 0, title: title || undefined
-  });   
-    }
-    // We parse strings to numbers here before passing to the service
     return this.productsService.findAll({
       categoryName: categoryName || undefined,
       limit: limit ? Number(limit) : 20,
@@ -44,34 +34,27 @@ export class ProductsController {
     });
   }
 
-  /**
-   * GET /api/products/:id
-   * Handles prefixed IDs like "local-1" or "fake-1"
-   */
   @Get(':id')
   @AllowAnonymous()
   async getOne(@Param('id') id: string) {
-    // Strip prefixes if they exist so the service gets a clean Database ID
     const cleanId = id.replace('local-', '').replace('fake-', '');
-    
-    // Convert to number for your DB lookup
     return this.productsService.findOne(cleanId);
   }
 
+  /**
+   * Now handles raw JSON with image URL arrays
+   */
   @Post()
-  @Roles(['vendor','admin'])
-  async create(@Body() createProductDto: any) {
-    return this.productsService.create(createProductDto);
+  @Roles(['vendor', 'admin'])
+  async create(@Body() dto: any) {
+    return this.productsService.create(dto);
   }
 
   @Patch(':id')
-  @Roles(['vendor','admin'])
-  async update(
-    @Param('id') id: string, 
-    @Body() updateProductDto: any
-  ) {
+  @Roles(['vendor', 'admin'])
+  async update(@Param('id') id: string, @Body() dto: any) {
     const cleanId = id.replace('local-', '').replace('fake-', '');
-    return this.productsService.update(cleanId, updateProductDto);
+    return this.productsService.update(cleanId, dto);
   }
 
   @Delete(':id')
