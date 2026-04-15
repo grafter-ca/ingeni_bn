@@ -61,6 +61,11 @@ const LoginForm: React.FC<LoginFormProps> = ({
           <p className="text-red-500 text-xs text-center font-poppins">{error}</p>
         </div>
       )}
+      <div className="flex -mb-2 justify-end">
+        <Link to="#forgot-password" className="text-xs text-gray-400 hover:text-white transition-colors">
+          Forgot Password?
+        </Link>
+      </div>
 
       <Button
         type="submit"
@@ -68,11 +73,6 @@ const LoginForm: React.FC<LoginFormProps> = ({
         label={loading ? "Verifying..." : "Login"}
       />
       
-      <div className="flex justify-end">
-        <Link to="#forgot-password" className="text-xs text-gray-400 hover:text-white transition-colors">
-          Forgot Password?
-        </Link>
-      </div>
     </form>
   );
 };

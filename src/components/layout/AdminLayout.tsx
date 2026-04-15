@@ -90,7 +90,7 @@ export default function AdminLayout() {
       {/* Overlay (mobile only) */}
       <div
         className={`
-          fixed inset-0 bg-black/40 z-40 transition-opacity duration-300 lg:hidden
+          fixed inset-0 bg-black/90 z-40 transition-opacity duration-300 lg:hidden
           ${opened ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}
         `}
         onClick={handleToggleMenu}

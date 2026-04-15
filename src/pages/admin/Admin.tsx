@@ -3,12 +3,14 @@ import { useProductStore } from "../../store/productStore";
 import { useAuthActions } from "../../context/AuthContext";
 import { Users, Package, ShoppingCart, ArrowUpRight, Activity } from "lucide-react";
 import  StatCard  from "../../features/admin/home/StatCard";
+import { useOrderStore } from "../../store/useOrderStore";
 
 // Using the StatCard style from your previous high-fidelity designs
 
 
 function Admin() {
   const { fetchProducts } = useProductStore();
+  const { fetchAllOrders } = useOrderStore();
   const { admin } = useAuthActions();    
   const [loading, setLoading] = useState(true);
 
@@ -27,14 +29,10 @@ function Admin() {
       // If 'res' is the result, total is usually at 'res.total'
       const userRes = await admin.listUsers({ limit: 1 }); 
       
-      // 2. Orders Call (Ensure this path is correct in your Vite/Next config)
-      const orderRes = await fetch("/api/orders/count");
-      const orderData = await orderRes.json();
-
       setStats({
         users: userRes.total || 0, // Extracting the total count
-        orders: orderData.count || 0,
-        products: fetchProducts.length, // From your productStore
+        orders: fetchAllOrders.length || 0,
+        products: fetchProducts.length || 0, // From your productStore
       });
 
     } catch (err) {
@@ -73,7 +71,7 @@ function Admin() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard 
-          title="Total Entities" 
+          title="Total Users" 
           value={loading ? "..." : stats.users} 
           icon={<Users size={20} />} 
           color="text-blue-500" 

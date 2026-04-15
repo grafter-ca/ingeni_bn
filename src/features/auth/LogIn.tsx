@@ -79,7 +79,7 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-12">
-      <div className="w-full md:w-100 max-w-125 mx-auto bg-gray-800 p-8 flex flex-col gap-6 shadow-2xl rounded-xl border border-gray-700">
+      <div className="w-90 md:w-100 max-w-125 mx-auto bg-gray-800 p-8 flex flex-col gap-6 shadow-2xl rounded-xl border border-gray-700">
         <header className="flex flex-col items-center gap-2 text-center">
           <img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" />
           <h1 className="font-poppins font-bold text-2xl text-white">Welcome Back</h1>
