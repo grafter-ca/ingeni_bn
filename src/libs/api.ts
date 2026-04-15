@@ -16,6 +16,7 @@ async function baseRequest<T>(
       "Content-Type": "application/json",
       ...options.headers,
     },
+    credentials:"include",
     body:
       options.body && typeof options.body !== "string"
         ? JSON.stringify(options.body)

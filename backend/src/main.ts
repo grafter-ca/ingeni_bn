@@ -18,7 +18,7 @@ async function bootstrap() {
 
   // In your NestJS main.ts
 app.enableCors({
-  origin: ['http://localhost:3000','http://localhost:5173'], // Your React App URL
+  origin: ['http://localhost:5173',process.env.FRONTEND_URL || 'http://localhost:3000'], 
   credentials: true, // Required for Better-Auth cookies
 });
 

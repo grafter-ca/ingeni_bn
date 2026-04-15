@@ -1,9 +1,12 @@
-import { Controller, Get, Post, Body, Param, Patch, Req, Query, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Req, Query, ForbiddenException, UseGuards } from '@nestjs/common';
 import { OrderService } from './order.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
 import { UserRole, OrderStatus } from '../../generated/prisma/client.js';
+import { AuthGuard } from '../auth/guards/auth.guard.js';
 
+
+@UseGuards(AuthGuard)
 @Controller('orders')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
