@@ -3,5 +3,5 @@ import { OrderStatus } from '../../../generated/prisma/client.js'; // Import you
 
 export class UpdateOrderStatusDto {
   @IsEnum(OrderStatus)
-  status: OrderStatus;
+  status!: OrderStatus;
 }

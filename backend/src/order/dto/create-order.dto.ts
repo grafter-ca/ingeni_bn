@@ -1,34 +1,83 @@
-import { IsString, IsArray, IsEnum, IsNotEmpty, IsNumber, ValidateNested, Min } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+
 import { Type } from 'class-transformer';
+
 import { PaymentMethod } from '../../../generated/prisma/client.js';
 
-// This handles individual items in the cart
 class OrderItemDto {
   @IsString()
-  @IsNotEmpty()
-  productId: string;
+  productId!: string;
+
+  @IsString()
+  vendorId!: string;
 
   @IsNumber()
-  @Min(1)
-  quantity: number;
+  quantity!: number;
 }
 
-// This handles the main Order request
+class GuestUserDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @IsString()
+  name!: string;
+
+  @IsString()
+  email!: string;
+
+  @IsString()
+  phoneNumber!: string;
+}
+
 export class CreateOrderDto {
   @IsArray()
-  @IsNotEmpty()
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
-  items: OrderItemDto[];
+  items!: OrderItemDto[];
 
   @IsString()
-  @IsNotEmpty()
-  shippingAddress: string;
+  shippingAddress!: string;
 
   @IsString()
-  @IsNotEmpty()
-  phoneNumber: string;
+  phoneNumber!: string;
 
   @IsEnum(PaymentMethod)
-  paymentMethod: PaymentMethod;
+  paymentMethod!: PaymentMethod;
+
+  // -----------------------------------
+  // OPTIONAL TOTALS
+  // -----------------------------------
+
+  @IsOptional()
+  @IsNumber()
+  totalAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  taxAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  shippingFees?: number;
+
+  // -----------------------------------
+  // OPTIONAL USER
+  // -----------------------------------
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GuestUserDto)
+  user?: GuestUserDto;
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }

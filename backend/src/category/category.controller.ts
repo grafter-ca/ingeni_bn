@@ -28,21 +28,21 @@ export class CategoryController {
 
   /**
    * POST /categories
-   * Handles single image upload for a new category
+   * Processes a single image binary stream from FormData to create a category
    */
   @Post()
   @Roles(['admin'])
-  @UseInterceptors(FileInterceptor('image')) // 'image' is the key the frontend must use in FormData
+  @UseInterceptors(FileInterceptor('image')) // Front-end must append file binary directly to the 'image' key
   async create(
     @Body() data: any, 
-    @UploadedFile() file: Express.Multer.File // This matches the type fix we did earlier
+    @UploadedFile() file: Express.Multer.File
   ) {
     return this.categoryService.create(data, file);
   }
 
   /**
    * PATCH /categories/:id
-   * Allows updating category text or replacing the single image
+   * Mutates textual fields or handles asset substitution seamlessly
    */
   @Patch(':id')
   @Roles(['admin'])
