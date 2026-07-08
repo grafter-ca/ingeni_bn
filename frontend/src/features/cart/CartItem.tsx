@@ -83,7 +83,7 @@ function CartItem() {
               {/* Price Display */}
               <div className="text-right">
                 <p className="font-black text-white text-sm">
-                  RW {(Number(item.price || 0) * item.quantity).toLocaleString()}
+                  RF {(Number(item.price || 0) * item.quantity).toLocaleString()}
                 </p>
               </div>
             </div>

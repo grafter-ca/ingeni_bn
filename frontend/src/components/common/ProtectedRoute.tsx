@@ -12,6 +12,10 @@ type Props = {
 const ProtectedRoute = ({ children, requiredRole }: Props) => {
   const { user, isLoading, isAuthenticated } = useAuthState();
   const [showModal, setShowModal] = useState(false);
+  
+  const handleCloseModal = () => {
+    setShowModal(false);
+  };
 
   // Sync modal visibility with auth state
   useEffect(() => {
@@ -53,7 +57,7 @@ const ProtectedRoute = ({ children, requiredRole }: Props) => {
       
       <AuthPromptModal 
         isOpen={showModal} 
-        onClose={() => setShowModal(false)} 
+        onClose={handleCloseModal} 
       />
     </div>
   );

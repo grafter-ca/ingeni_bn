@@ -40,10 +40,10 @@ const AuthPromptModal = ({ isOpen, onClose }: Props) => {
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
           >
-            <div className="bg-gray-800 w-full max-w-md p-8 flex flex-col gap-6 relative">
+            <div className="bg-gray-800 w-full max-w-md p-8 flex flex-col gap-6 relative rounded-xl">
               <button
                 onClick={onClose}
-                className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+                className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors border border-gray-600 rounded-full p-1"
               >
                 <X size={20} />
               </button>
@@ -59,6 +59,7 @@ const AuthPromptModal = ({ isOpen, onClose }: Props) => {
 
               <div className="flex flex-col gap-3">
                 <Button
+                className="justify-center bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold"
                   label="Login to my account"
                   icon={LogIn}
                   onClick={handleLogin}
@@ -67,7 +68,7 @@ const AuthPromptModal = ({ isOpen, onClose }: Props) => {
                   label="Create free account"
                   icon={UserPlus}
                   variant="outline"
-                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                  className="justify-center py-4 rounded-2xl font-bold"
                   onClick={handleRegister}
                 />
               </div>

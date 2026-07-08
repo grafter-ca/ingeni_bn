@@ -43,13 +43,19 @@ export const router = createBrowserRouter([
       { path: "verify-email", element: <VerifyEmail /> },
       { path: "unauthorized", element: <Unauthorized /> },
       { path: "cart", element: <Cart /> },
-      { path: "checkout", element: <CheckoutPage /> },
+      { path: "checkout", element:(
+         <ProtectedRoute requiredRole="user">
+           <CheckoutPage />
+         </ProtectedRoute>
+      ) 
+    },
       { path: "order-success/:orderNumber", element: <OrderSuccess /> },
       { path: "my-orders", element: <MyOrders /> },
       { path: "*", element: <NotFound /> },
     ],
   },
 
+  // protect checkout and my-orders routes for authenticated users only, but allow public access to products and cart
   // --- 2. ADMIN PROTECTED ROUTES ---
   {
     path: "/admin",

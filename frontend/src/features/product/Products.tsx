@@ -29,7 +29,7 @@ const Products = () => {
   const { handleClear } = useSearch();
 
   const [sortBy, setSortBy] = useState<SortOption>("default");
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 2000]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 20000]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [page, setPage] = useState(1);
   const PER_PAGE = 12;

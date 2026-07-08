@@ -1,4 +1,3 @@
-export type ProductImage = string | { url: string };
 
 export type ApiProduct = {
   id: string;
@@ -8,7 +7,7 @@ export type ApiProduct = {
   isActive?:boolean;
   price: number;
   description: string;
-  images: ProductImage[];
+  images: string[];
   category: ApiCategory;
   vendor?: ApiVendor;
   categoryId: string;
@@ -25,6 +24,7 @@ export type ApiVendor ={
   id: string;
   storeName: string;
   email?: string;
+  address?:string | null;
 }
 
 export type UserRole = "user" | "admin" | "vendor"

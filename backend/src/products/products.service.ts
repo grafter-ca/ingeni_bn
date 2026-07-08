@@ -10,19 +10,61 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export class ProductsService {
   constructor(private prisma: PrismaService) {}
 
+  private async getAccessFilters(isPublic: boolean, userContext?: { id: string; role: string }, vendorId?: string) {
+    const filters: any = { }; 
+    if (isPublic) {
+      filters.isActive = true;
+    }
+    else if (!isPublic && userContext?.role === 'vendor') {
+      const vendorProfile = await this.prisma.vendor.findUnique({
+        where: { userId: userContext.id },
+        select: { id: true },
+      });
+      if (!vendorProfile) throw new ForbiddenException('Vendor profile not found.');
+      filters.vendorId = vendorProfile.id; // Lockdown to own store
+    } else if (vendorId) {
+      filters.vendorId = vendorId; // Admin/Public can filter by specific store
+    }
+    return filters;
+  }
+
   // --- FIND ALL PRODUCTS ---
-  async findAll(params: {
+async findAll(params: {
     categoryName?: string;
     vendorId?: string;
     limit?: number;
     offset?: number;
     title?: string;
+    storeInfo?: {
+      name?: string;
+      address?: string;
+      contact?: string;
+    };
     includeInactive?: boolean; // True for admin/vendor dashboards
-  } = {}) {
-    const { categoryName, vendorId, limit = 20, offset = 0, title, includeInactive = false } = params;
+  } = {},
+   isPublic : boolean = false,
+   userContext?:{id:string; role:string}
+) {
+  const { categoryName, vendorId, limit = 20, offset = 0, title, storeInfo, includeInactive = false } = params;
+  const accessFilters = await this.getAccessFilters(isPublic, userContext, vendorId);
+  let finalVendorId = vendorId;
+
+  if (isPublic && userContext?.role === 'vendor'){
+    const vendorProfile = await this.prisma.vendor.findUnique({
+      where:{userId : userContext.id},
+      select: {id: true },
+    });
+
+    if(!vendorProfile){
+      throw new ForbiddenException('Vendor Profile not found for this account.');
+    }
+    //force vendor to only see their own products, ignoring any passed vendor id
+    finalVendorId = vendorProfile.id;
+  }
 
     return this.prisma.product.findMany({
       where: {
+        ...accessFilters,
         // Public users only see Admin-approved active products
         ...(!includeInactive && { isActive: true }),
         ...(categoryName && {
@@ -30,13 +72,20 @@ export class ProductsService {
             name: { contains: categoryName, mode: 'insensitive' },
           },
         }),
-        ...(vendorId && { vendorId }),
+        ...(!finalVendorId && {vendorId : finalVendorId}),
+        ...(storeInfo && {
+          vendor: {
+            ...(storeInfo.name && { storeName: { contains: storeInfo.name, mode: 'insensitive' } }),
+            ...(storeInfo.address && { address: { contains: storeInfo.address, mode: 'insensitive' } }),
+            ...(storeInfo.contact && { phone: { contains: storeInfo.contact, mode: 'insensitive' } }),
+          }
+        }),
         ...(title && {
           title: { contains: title, mode: 'insensitive' },
         }),
       },
-      take: limit,
-      skip: offset,
+      take: Number(limit),
+      skip: Number(offset),
       include: {
         category: true,
         images: true,

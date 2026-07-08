@@ -11,12 +11,16 @@ import {
   Store,
   Check,
   ShoppingCart,
+  Shield,
 } from "lucide-react";
 
 import { useCartActions } from "../../hooks/useCartActions";
 import { productService } from "../../services/productService";
 import type { ApiProduct } from "../../types/api";
 import Button from "../../components/ui/Button";
+import { useProductStore } from "../../store/productStore";
+import ProductCard from "../../components/common/ProductCard";
+import { motion } from "framer-motion";
 
 type NormalizedImage = {
   url: string;
@@ -47,6 +51,9 @@ export default function ProductDetail() {
   const [guestEmail, setGuestEmail] = useState("");
 
   const [guestPhone, setGuestPhone] = useState("");
+  const {products} = useProductStore();
+
+
 
   useEffect(() => {
     if (!id) return;
@@ -70,6 +77,12 @@ export default function ProductDetail() {
   /**
    * Normalize images safely
    */
+
+     // Suggested Products Slicing
+  const suggestedProducts = useMemo(() => {
+    return products.filter((p) => p.id !== id).slice(0, 4);
+  }, [products, id]);
+  
   const images: NormalizedImage[] = useMemo(() => {
     if (!product?.images || !Array.isArray(product.images)) {
       return [{ url: "/placeholder.png" }];
@@ -375,11 +388,11 @@ export default function ProductDetail() {
               <div className="flex items-baseline gap-4 border-b border-white/5 pb-6">
 
                 <span className="text-4xl font-light">
-                  ${parsedPrice.toFixed(2)}
+                  RF {parsedPrice.toFixed(2)}
                 </span>
 
                 <span className="text-gray-600 line-through text-lg">
-                  ${(parsedPrice * 1.25).toFixed(0)}
+                  RF {(parsedPrice * 1.25).toFixed(0)}
                 </span>
               </div>
 
@@ -479,24 +492,45 @@ export default function ProductDetail() {
               </p>
             </div>
 
-            {/* Trustcard static to all products is custom */}
-            <div className="bg-[#0b0b0b] border border-white/5 rounded-3xl p-5 flex items-center gap-4">
+            <div className="grid grid-cols-2 gap-4">
+  {/* Card 1: Quality Assurance */}
+  <motion.div 
+    whileHover={{ y: -5 }}
+    className="bg-[#0b0b0b] border border-white/5 rounded-3xl p-5 flex items-center gap-4 cursor-pointer"
+  >
+    <div className="w-12 h-12 shrink-0 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+      <Check size={20} className="text-green-400" />
+    </div>
+    <div>
+      <p className="text-[10px] uppercase tracking-[0.2em] text-green-500 font-bold">Trusted Node</p>
+      <h3 className="text-sm font-black text-green-400">Quality Assured</h3>
+    </div>
+  </motion.div>
 
-              <div className="w-12 h-12 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
-                <Check size={20} className="text-green-400" />
-              </div>
-
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-green-500 font-bold">
-                  Trusted Node
-                </p>
-                <h3 className="text-lg font-black text-green-400">
-                  Quality Assured
-                </h3>
-              </div>
-            </div>
+  {/* Card 2: Secure Transit */}
+  <motion.div 
+    whileHover={{ y: -5 }}
+    className="bg-[#0b0b0b] border border-white/5 rounded-3xl p-5 flex items-center gap-4 cursor-pointer"
+  >
+    <div className="w-12 h-12 shrink-0 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+      <Shield size={20} className="text-blue-400" />
+    </div>
+    <div>
+      <p className="text-[10px] uppercase tracking-[0.2em] text-blue-500 font-bold">Secure Node</p>
+      <h3 className="text-sm font-black text-blue-400">Verified Transit</h3>
+    </div>
+  </motion.div>
+</div>
           </div>
         </div>
+
+        {/* Suggested Alternatives */}
+        <section className="py-16 mt-16 border-t border-white/5">
+          <h2 className="text-xl font-black uppercase tracking-widest mb-8">Suggested Alternatives</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {suggestedProducts.map((p) => <ProductCard key={p.id} product={p} />)}
+          </div>
+        </section>
       </main>
     </div>
   );

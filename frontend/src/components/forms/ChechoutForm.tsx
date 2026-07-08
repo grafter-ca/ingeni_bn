@@ -24,7 +24,7 @@ type CheckoutFormProps = {
   };
 };
 
-const CheckoutForm = ({
+const CheckoutForm =({
   onSubmit,
   loading: externalLoading = false,
   error: externalError = null,
@@ -114,7 +114,7 @@ const CheckoutForm = ({
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm">
+        <div className="bg-red-500/10 border text-center border-red-500/20 text-red-400 p-4 rounded-xl text-sm">
           {error}
         </div>
       )}
@@ -159,7 +159,7 @@ const CheckoutForm = ({
           name="paymentMethod"
           required
           defaultValue={defaultValues.paymentMethod}
-          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 outline-none focus:border-blue-500"
+          className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 outline-none focus:border-blue-500"
         >
           <option value="MOBILE_MONEY">
             Mobile Money

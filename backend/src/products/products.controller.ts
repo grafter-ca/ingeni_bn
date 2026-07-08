@@ -19,7 +19,6 @@ import { AllowAnonymous, Roles } from '@thallesp/nestjs-better-auth';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 
 @Controller('products')
-@UseGuards(RolesGuard)
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
@@ -28,22 +27,8 @@ export class ProductsController {
 
   @Get()
   @AllowAnonymous()
-  async getAll(
-    @Query('category') categoryName?: string,
-    @Query('vendorId') vendorId?: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('title') title?: string,
-    @Query('includeInactive') includeInactive?: string,
-  ) {
-    return this.productsService.findAll({
-      categoryName: categoryName || undefined,
-      vendorId: vendorId || undefined,
-      limit: limit ? Number(limit) : 20,
-      offset: offset ? Number(offset) : 0,
-      title: title || undefined,
-      includeInactive: includeInactive === 'true',
-    });
+ async getAllPublic(@Query() query: any) {
+    return this.productsService.findAll(query, true);
   }
 
   @Get(':id')
@@ -53,7 +38,18 @@ export class ProductsController {
     return this.productsService.findOne(cleanId);
   }
 
+  @Get()
+  @UseGuards(RolesGuard)
+  @Roles(['vendor', 'admin'])
+  async getAllPrivate(@Query() query: any, @Req() req: any) {
+    // Force ownership context
+    const userContext = { id: req.user.id, role: req.user.role };
+    return this.productsService.findAll(query, false, userContext);
+  }
+
+
   @Post()
+  @UseGuards(RolesGuard)
   @Roles(['vendor', 'admin'])
   @UseInterceptors(FilesInterceptor('images', 5))
   async create(

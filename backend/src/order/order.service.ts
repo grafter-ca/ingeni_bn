@@ -40,9 +40,7 @@ export class OrderService {
     });
 
     if (dbProducts.length !== productIds.length) {
-      throw new BadRequestException(
-        'One or more products not found',
-      );
+      throw new BadRequestException('One or more products not found');
     }
     // -------------------------------------------------------
     // CALCULATIONS
@@ -50,14 +48,10 @@ export class OrderService {
     let subtotal = 0;
 
     const orderItemsData = dto.items.map((item) => {
-      const product = dbProducts.find(
-        (p) => p.id === item.productId,
-      );
+      const product = dbProducts.find((p) => p.id === item.productId);
 
       if (!product) {
-        throw new BadRequestException(
-          `Product ${item.productId} not found`,
-        );
+        throw new BadRequestException(`Product ${item.productId} not found`);
       }
 
       // STOCK CHECK
@@ -79,19 +73,23 @@ export class OrderService {
       };
     });
 
+    const vendorRevenueMap: Record<string, number> = {};
+    orderItemsData.forEach((item) => {
+      const itemTotal = Number(item.priceAtPurchase) * item.quantity;
+      vendorRevenueMap[item.vendorId] =
+        (vendorRevenueMap[item.vendorId] || 0) + itemTotal;
+    });
+
     // -------------------------------------------------------
     // TOTALS
     // -------------------------------------------------------
-    const taxAmount =
-      dto.taxAmount ?? Number((subtotal * 0.18).toFixed(2));
+    const taxAmount = dto.taxAmount ?? Number((subtotal * 0.18).toFixed(2));
 
     const shippingFees = dto.shippingFees ?? 2000;
 
     const totalAmount =
       dto.totalAmount ??
-      Number(
-        (subtotal + taxAmount + shippingFees).toFixed(2),
-      );
+      Number((subtotal + taxAmount + shippingFees).toFixed(2));
     // -------------------------------------------------------
     // USER HANDLING
     // -------------------------------------------------------
@@ -100,8 +98,7 @@ export class OrderService {
     // Create guest user automatically if not logged in
     if (!finalUserId) {
       const guestEmail =
-        dto.user?.email ||
-        `guest-${Date.now()}@ingeristore.rw`;
+        dto.user?.email || `guest-${Date.now()}@ingeristore.rw`;
 
       const guestUser = await this.prisma.user.create({
         data: {
@@ -145,23 +142,20 @@ export class OrderService {
           userId: finalUserId!,
           totalAmount,
           taxAmount,
-          email: dto.user?.email || "unknown",
+          email: dto.user?.email || 'unknown',
           shippingFees,
           shippingAddress: dto.shippingAddress,
           phoneNumber: dto.phoneNumber,
-          paymentMethod:
-            dto.paymentMethod as PaymentMethod,
+          paymentMethod: dto.paymentMethod as PaymentMethod,
           status: OrderStatus.PENDING,
-          paymentStatus:
-            PaymentStatus.INITIALIZED,
+          paymentStatus: PaymentStatus.INITIALIZED,
 
           items: {
             create: orderItemsData.map((item) => ({
               productId: item.productId,
               vendorId: item.vendorId,
               quantity: item.quantity,
-              priceAtPurchase:
-                item.priceAtPurchase,
+              priceAtPurchase: item.priceAtPurchase,
             })),
           },
         },
@@ -180,6 +174,21 @@ export class OrderService {
           payment: true,
         },
       });
+
+      // ---------------------------------------------------
+      // CREATE FULFILLMENT RECORDS FOR EACH VENDOR
+      // ---------------------------------------------------
+      for (const [vendorId, revenue] of Object.entries(vendorRevenueMap)) {
+        await tx.fulfillment.create({
+          data: {
+            orderId: order.id,
+            vendorId: vendorId,
+            revenue: revenue, // Vendor-specific revenue
+            status: OrderStatus.PENDING,
+          },
+        });
+      }
+
       // ---------------------------------------------------
       // CREATE PAYMENT RECORD
       // ---------------------------------------------------
@@ -196,11 +205,9 @@ export class OrderService {
           status: PaymentStatus.INITIALIZED,
 
           provider:
-            dto.paymentMethod ===
-            'MOBILE_MONEY'
+            dto.paymentMethod === 'MOBILE_MONEY'
               ? 'MTN_MOMO'
-              : dto.paymentMethod ===
-                  'CREDIT_CARD'
+              : dto.paymentMethod === 'CREDIT_CARD'
                 ? 'FLUTTERWAVE'
                 : 'CASH',
         },
@@ -270,41 +277,36 @@ export class OrderService {
   // GET VENDOR ORDERS
   // =========================================================
   async getOrdersForVendor(vendorId: string) {
-    return this.prisma.order.findMany({
+    return this.prisma.fulfillment.findMany({
       where: {
-        items: {
-          some: {
-            vendorId,
-          },
-        },
+        vendorId,
       },
-
       include: {
-        items: {
-          where: {
-            vendorId,
-          },
-
+        order: {
           include: {
-            product: {
-              include: {
-                images: true,
+            user: {
+              select: {
+                name: true,
+                email: true,
+                phone: true,
               },
             },
+            items: {
+              where: {
+                vendorId,
+              },
+              include: {
+                product: {
+                  include: {
+                    images: true,
+                  },
+                },
+              },
+            },
+            payment: true,
           },
         },
-
-        user: {
-          select: {
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-
-        payment: true,
       },
-
       orderBy: {
         createdAt: 'desc',
       },
@@ -353,27 +355,30 @@ export class OrderService {
   // =========================================================
   // UPDATE ORDER STATUS
   // =========================================================
-  async updateStatus(
-    orderId: string,
-    status: OrderStatus,
-  ) {
-    return this.prisma.order.update({
-      where: {
-        id: orderId,
-      },
+  async updateStatus(orderId: string, status: OrderStatus) {
+    return await this.prisma.$transaction(async (tx) => {
+      // Update the status
+      const updatedOrder = await tx.order.update({
+        where: { id: orderId },
+        data: { status },
+      });
 
-      data: {
-        status,
-      },
+      // Create the history entry
+      await tx.orderHistory.create({
+        data: {
+          orderId: orderId,
+          status: status,
+        },
+      });
+
+      return updatedOrder;
     });
   }
 
   // =========================================================
   // GET VENDOR ID FROM USER ID
   // =========================================================
-  async getVendorIdByUserId(
-    userId: string,
-  ): Promise<string> {
+  async getVendorIdByUserId(userId: string): Promise<string> {
     const vendor = await this.prisma.vendor.findUnique({
       where: {
         userId,
@@ -385,9 +390,7 @@ export class OrderService {
     });
 
     if (!vendor) {
-      throw new NotFoundException(
-        'Vendor profile not found',
-      );
+      throw new NotFoundException('Vendor profile not found');
     }
 
     return vendor.id;
@@ -420,17 +423,16 @@ export class OrderService {
             },
           },
         },
-
         payment: true,
+        fulfillments: {
+          include: {
+            vendor: true,
+          },
+        },
       },
     });
 
-    if (!order) {
-      throw new NotFoundException(
-        'Order record not found',
-      );
-    }
-
+    if (!order) throw new NotFoundException('Order record not found');
     return order;
   }
 }

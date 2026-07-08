@@ -2,6 +2,16 @@ import { useEffect, useState } from 'react';
 import { Plus, Search, Edit3, Trash2, Package, Loader2, X } from 'lucide-react';
 import { useProductStore } from '../../store/productStore';
 import  ProductFormModal  from '../../features/vendor/ProductFormModal';
+import { getImageUrl } from '../../libs/getImageUrl';
+import { useAuthState } from '../../context/AuthContext';
+import { useVendorStore } from '../../store/vendorStore';
+
+const LoadingSpinner = () => (
+  <div className="p-24 flex flex-col items-center justify-center text-gray-500 gap-3">
+    <Loader2 className="animate-spin text-green-500" size={32} />
+    <p className="text-xs font-mono tracking-widest uppercase text-gray-400">Syncing database arrays...</p>
+  </div>
+);
 
 const VendorInventory = () => {
   const {
@@ -10,18 +20,40 @@ const VendorInventory = () => {
     searchQuery,
     setSearchQuery,
     isLoading,
-    fetchProducts,
     setEditingProduct,
+    fetchVendorProducts,
+    setSelectedVendorId,
     removeProduct,
-    isEditing, // Stores the active product object or null if creating a new one
+    isEditing, 
     clearFormData // Helper method to scrub data fields on exit
   } = useProductStore();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const {fetchVendorDetails} = useVendorStore();
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const {user} =useAuthState();
+
+  const currentVendorId = user?.id || null; 
+
+ useEffect(() => {
+    // Only fetch when we have a user and they have an ID
+    if (!isLoading && user?.id) {
+      fetchVendorDetails(user.id);
+      setSelectedVendorId(user.id);
+      fetchVendorProducts(user.id);
+    }
+  }, [user, isLoading, fetchVendorDetails, setSelectedVendorId, fetchVendorProducts]);
+
+  // Prevent rendering content with null IDs
+  if (isLoading) return <LoadingSpinner />; 
+  if (!user?.id) return <p>Please log in to manage your inventory.</p>; 
+ 
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    if (currentVendorId) {
+      setSelectedVendorId(currentVendorId);
+      fetchVendorProducts(currentVendorId);
+    }
+  }, [currentVendorId, fetchVendorProducts, setSelectedVendorId]);
 
   // Listen to the store's editing lifecycle to control modal visibility
   useEffect(() => {
@@ -127,7 +159,7 @@ const VendorInventory = () => {
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-4">
                           <img 
-                            src={product.images?.[0] || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&w=120&q=80'} 
+                            src={getImageUrl(product.images?.[0])} 
                             alt={product.title} 
                             className="w-12 h-12 rounded-xl object-cover bg-white/5 border border-white/5 shrink-0" 
                           />

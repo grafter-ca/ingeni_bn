@@ -108,7 +108,7 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
               type="range"
               min={0}
               max={20000}
-              step={50}
+              step={200}
               value={priceRange[1]}
               onChange={(e) => {
                 const val = Number(e.target.value);

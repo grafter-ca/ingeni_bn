@@ -15,10 +15,10 @@ function OrderSummary() {
   // Calculations
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const tax = subtotal * 0.18; // Updated to 18% VAT
-  const shipping = 2000; // Flat fee for Kigali
+  const shipping = 500; // Flat fee for Kigali
   const total = subtotal + tax + shipping;
 
-  const formatCurrency = (val: number) => `RW ${val.toLocaleString()}`;
+  const formatCurrency = (val: number) => `RF ${val.toLocaleString()}`;
 
   return (
     <div className="lg:col-span-1">

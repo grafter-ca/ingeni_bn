@@ -145,29 +145,23 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       throw err;
     }
   },
-  // --- DELETE ORDER ENTRY ---
-  deleteOrder: async (orderId) => {
-    try {
-      set({ loading: true, error: null });
-      
-      // Assumes your API Client exposes a delete method matching database parameters
-      if (typeof (OrderClient as any).delete === "function") {
-        await (OrderClient as any).delete(orderId);
-      } else {
-        // Fallback for custom endpoint routers like OrderClient.deleteOrder(id)
-        await OrderClient.updateStatus(orderId, "cancelled"); 
-      }
+  // deleteOrder is now a cancellation that updates the order status to "CANCELLED"
+deleteOrder: async (orderId) => {
+  try {
+    set({ loading: true, error: null });
+    
+    // Instead of actual deletion, always treat this as a cancellation
+    const updatedOrder = await OrderClient.updateStatus(orderId, "CANCELLED");
 
-      set((state) => ({
-        orders: state.orders.filter((o) => o.id !== orderId),
-        currentOrder: state.currentOrder?.id === orderId ? null : state.currentOrder,
-        loading: false,
-      }));
-
-      get().applyFilters();
-    } catch (err: any) {
-      set({ error: err?.message || "Failed to remove order registry record", loading: false });
-      throw err;
-    }
+    set((state) => ({
+      orders: state.orders.map((o) => (o.id === orderId ? updatedOrder : o)),
+      loading: false,
+    }));
+    
+    get().applyFilters();
+  } catch (err: any) {
+    set({ error: "Failed to cancel order", loading: false });
+    throw err;
   }
+}
 }));

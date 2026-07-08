@@ -101,12 +101,13 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     }
   },
 
+  // fetchVendor by userid to pull detailed profile insights for dashboard and management views
   fetchVendorDetails: async (id) => {
     set({ isLoading: true, error: null, activeMetrics: null });
     try {
       // Fetch both profile properties and operational performance tracking indices concurrently
       const [profile, metrics] = await Promise.all([
-        vendorService.getVendorById(id),
+        vendorService.getVendorById(id),  
         vendorService.getVendorMetrics(id)
       ]);
       set({ selectedVendor: profile, activeMetrics: metrics, isLoading: false });

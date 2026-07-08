@@ -14,12 +14,14 @@ import {
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import type { PaymentMethod } from "../types/api";
 import { useAuthState } from "../context/AuthContext";
+import  {PaymentSecurityGateModal}  from "../features/auth/PaymentSecurityGateModal";
 
 const CheckoutPage = () => {
   const { items, clearCart, getTotalPrice, getTotalItems } =
     useCartStore();
 
   const {user} = useAuthState();
+  const [showPaymentGate, setShowPaymentGate] = useState(false);
 
   //trucling current user ID for order association, but allowing null for guests
   const userId = user?.id || null;
@@ -238,7 +240,7 @@ const CheckoutPage = () => {
             </div>
           </div>
 
-          {/* RIGHT */}
+          {/* Order summary */}
           <div className="lg:col-span-5">
             <div className="sticky top-20 bg-[#0a0a0a] border border-white/5 rounded-3xl p-8">
               <h2 className="text-xl font-bold mb-6">
@@ -268,7 +270,7 @@ const CheckoutPage = () => {
                     </div>
 
                     <div className="font-semibold text-sm">
-                      RW{" "}
+                      RF {" "}
                       {(
                         item.price * item.quantity
                       ).toLocaleString()}
@@ -284,7 +286,7 @@ const CheckoutPage = () => {
                   </span>
 
                   <span>
-                    RW {total.toLocaleString()}
+                    RF {total.toLocaleString()}
                   </span>
                 </div>
 
@@ -292,7 +294,7 @@ const CheckoutPage = () => {
                   <span className="text-gray-400">Tax</span>
 
                   <span>
-                    RW {tax.toLocaleString()}
+                    RF {tax.toLocaleString()}
                   </span>
                 </div>
 
@@ -302,7 +304,7 @@ const CheckoutPage = () => {
                   </span>
 
                   <span>
-                    RW {shipping.toLocaleString()}
+                    RF {shipping.toLocaleString()}
                   </span>
                 </div>
 
@@ -310,11 +312,27 @@ const CheckoutPage = () => {
                   <span>Total</span>
 
                   <span>
-                    RW {grandTotal.toLocaleString()}
+                    RF {grandTotal.toLocaleString()}
                   </span>
                 </div>
               </div>
-
+            {/* open our modal if user is not logged in */}
+               {
+                !user && showPaymentGate && (
+                  <PaymentSecurityGateModal
+                    isOpen={showPaymentGate}
+                    onClose={() => setShowPaymentGate(false)}
+                    onProceedToPayment={() => {
+                      setShowPaymentGate(false);
+                       document
+                        .querySelector<HTMLFormElement>(
+                          "#checkout-form"
+                        )
+                        ?.requestSubmit();
+                    }}
+                  />
+                )
+              }
               <button
                 onClick={() =>
                   document

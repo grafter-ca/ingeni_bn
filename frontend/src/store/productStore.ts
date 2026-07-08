@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { productService } from "../services/productService";
 import type { ApiCategory, ApiProduct } from "../types/api";
 
-// Assuming you have a standard basic shape for Vendor data records
 export interface ApiVendor {
   id: string;
   name: string;
@@ -10,110 +9,114 @@ export interface ApiVendor {
 }
 
 interface ProductState {
-  // Data State
+  // Data
   products: ApiProduct[];
   filteredProducts: ApiProduct[];
   categories: ApiCategory[];
-  vendors: ApiVendor[]; // <-- Added: Global repository of marketplace vendors
+  vendors: ApiVendor[];
+
+  // UI/Context State
   isLoading: boolean;
-  selectedVendorId: string | null; //深 <-- Added: Active tenant view context identifier
   isFetchingMore: boolean;
   error: string | null;
-
-  // Filter State
+  selectedVendorId: string | null;
   searchQuery: string;
   selectedCategory: string | null;
-
-  // Form/Modal State
   isEditing: ApiProduct | null;
-  formData: Omit<ApiProduct, "id" | "category" | "origin" | "images"> & { images: string[] };
 
-  // Methods
+  // Forms
+  formData: Omit<ApiProduct, "id" | "category" | "origin" | "images"> & {
+    images: string[];
+  };
+
+  // Actions
   fetchProducts: (params?: any) => Promise<void>;
   fetchMoreProducts: () => Promise<void>;
   fetchCategories: () => Promise<void>;
-  fetchVendors: () => Promise<void>; // <-- Added: Hydrates backend vendor profiles
+  fetchVendors: () => Promise<void>;
+  fetchVendorProducts: (vendorId: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   setCategory: (categoryNameOrId: string | null) => void;
-  setSelectedVendorId: (vendorId: string | null) => void; // <-- Added: Sets active tenant context
+  setSelectedVendorId: (vendorId: string | null) => void;
   applyFilters: () => void;
   updateFormData: (data: Partial<ProductState["formData"]>) => void;
   setEditingProduct: (product: ApiProduct | null) => void;
-  
-  // CRUD Actions
   addProduct: (vendorId: string) => Promise<void>;
   updateProduct: (id: string) => Promise<void>;
   removeProduct: (id: string) => Promise<void>;
+  clearFormData: () => void;
   clearFilters: () => void;
   getVendorId: () => string | null;
-  clearFormData?: () => void; // Optional helper to reset form data fields on modal close
 }
 
 export const useProductStore = create<ProductState>((set, get) => ({
-  // --- INITIAL STATE ---
   products: [],
   filteredProducts: [],
   categories: [],
-  vendors: [], // <-- Initial state setup
+  vendors: [],
   isLoading: false,
   isFetchingMore: false,
   error: null,
-  selectedVendorId: null, // <-- Initial state setup
+  selectedVendorId: null,
   searchQuery: "",
   selectedCategory: null,
-  
   isEditing: null,
   formData: {
     title: "",
     stock: 0,
     price: 0,
     description: "",
-    images: [], 
+    images: [],
     categoryId: "",
     vendorId: "",
   },
 
-  // --- DATA FETCHING ---
-  fetchProducts: async (params) => {
+  fetchProducts: async (params = {}) => {
     set({ isLoading: true, error: null });
     try {
-      // If a global vendor filter context is active, force it down into our payload requests automatically
       const activeVendorId = get().selectedVendorId;
-      const combinedParams = activeVendorId 
-        ? { ...params, vendorId: activeVendorId } 
+      const combinedParams = activeVendorId
+        ? { ...params, vendorId: activeVendorId }
         : params;
-
       const data = await productService.getProducts(combinedParams);
-      
+
       const sanitizedData = data.map((p: any) => ({
         ...p,
-        images: Array.isArray(p.images) && typeof p.images[0] === 'object' 
-          ? p.images.map((img: any) => img.url) 
-          : Array.isArray(p.images) ? p.images : []
+        images: Array.isArray(p.images)
+          ? p.images.map((img: any) =>
+              typeof img === "string" ? img : img.url,
+            )
+          : [],
       }));
-      
-      set({ 
-        products: sanitizedData, 
-        isLoading: false 
-      });
-      
-      // Sync filtered array reactively
+
+      set({ products: sanitizedData, isLoading: false });
       get().applyFilters();
     } catch (err) {
       set({ error: "Failed to fetch inventory", isLoading: false });
     }
   },
 
-  fetchMoreProducts: async () => {
-    const { isFetchingMore } = get();
-    if (isFetchingMore) return;
-    set({ isFetchingMore: true });
+  fetchVendorProducts: async (vendorId: string) => {
+    set({ isLoading: true, error: null });
     try {
-      set({ isFetchingMore: false });
+      const data = await productService.getProducts({ vendorId });
+      const sanitizedData = data.map((p: any) => ({
+        ...p,
+        images: Array.isArray(p.images)
+          ? p.images.map((img: any) =>
+              typeof img === "string" ? img : img.url,
+            )
+          : [],
+      }));
+      set({ products: sanitizedData, isLoading: false });
+      get().applyFilters();
     } catch (err) {
-      console.error("Failed to load more products:", err);
-      set({ isFetchingMore: false });
+      set({ error: "Failed to fetch vendor products", isLoading: false });
     }
+  },
+
+  fetchMoreProducts: async () => {
+    // Implement pagination logic here
   },
 
   fetchCategories: async () => {
@@ -125,79 +128,60 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }
   },
 
-  // --- NEW VENDOR REPOSITORY METHOD ---
   fetchVendors: async () => {
-    set({ isLoading: true, error: null });
     try {
-      // Assumes your backend service exposes a basic list endpoint for profiles
-      // If service is not built yet, you can use: const data = await axios.get("/api/vendors").then(res => res.data);
-      if (typeof (productService as any).getVendors === 'function') {
+      if (typeof (productService as any).getVendors === "function") {
         const data = await (productService as any).getVendors();
-        set({ vendors: data, isLoading: false });
-      } else {
-        console.warn("getVendors method is missing on your product API service wrapper.");
-        set({ isLoading: false });
+        set({ vendors: data });
       }
     } catch (err) {
-      set({ error: "Failed to sync merchant profiles", isLoading: false });
+      set({ error: "Failed to sync merchant profiles" });
     }
   },
 
-  // --- FILTERING ENGINE ---
   setSearchQuery: (query) => {
     set({ searchQuery: query });
     get().applyFilters();
   },
-
-  setCategory: (categoryNameOrId) => {
-    set({ selectedCategory: categoryNameOrId });
+  setCategory: (cat) => {
+    set({ selectedCategory: cat });
     get().applyFilters();
   },
 
-  // --- NEW CONTEXT SETTER METHOD ---
-  setSelectedVendorId: (vendorId) => {
+  setSelectedVendorId: (vendorId: string | null) => {
     set({ selectedVendorId: vendorId });
-    // Re-fetch products matching this merchant profile instantly or re-filter the current state array
-    get().fetchProducts();
+    // Automatically refresh the list when the vendor changes
+    if (vendorId) {
+      get().fetchVendorProducts(vendorId);
+    } else {
+      get().fetchProducts();
+    }
   },
 
  applyFilters: () => {
   const { products, searchQuery, selectedCategory, selectedVendorId } = get();
-  let updatedList = [...products];
+  
+  const filtered = products.filter((p) => {
+    // 1. Vendor Filter
+    const matchesVendor = !selectedVendorId || String(p.vendorId) === String(selectedVendorId);
+    
+    // 2. Category Filter
+    const matchesCategory = !selectedCategory || String(p.categoryId) === String(selectedCategory);
+    
+    // 3. Search Filter
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q || 
+      p.title.toLowerCase().includes(q) || 
+      p.description.toLowerCase().includes(q);
 
-  // 1. Safe Tenant Filtering Check
-  if (selectedVendorId) {
-    updatedList = updatedList.filter(
-      (p) => String(p.vendorId) === String(selectedVendorId)
-    );
-  }
+    return matchesVendor && matchesCategory && matchesSearch;
+  });
 
-  // 2. Text Queries
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase().trim();
-    updatedList = updatedList.filter(
-      (p) =>
-        p.title?.toLowerCase().includes(query) ||
-        p.description?.toLowerCase().includes(query)
-    );
-  }
-
-  // 3. Category Normalization Match Check
-  if (selectedCategory) {
-    updatedList = updatedList.filter(
-      (p) =>
-        String(p.categoryId) === String(selectedCategory) ||
-        p.category?.id === selectedCategory ||
-        p.category?.name === selectedCategory
-    );
-  }
-
-  set({ filteredProducts: updatedList });
+  set({ filteredProducts: filtered });
 },
 
-  // --- FORM MANAGEMENT ---
   updateFormData: (data) =>
-    set((state) => ({ formData: { ...state.formData, ...data } })),
+    set((s) => ({ formData: { ...s.formData, ...data } })),
 
   setEditingProduct: (product) => {
     if (product) {
@@ -208,93 +192,108 @@ export const useProductStore = create<ProductState>((set, get) => ({
           stock: product.stock ?? 0,
           price: product.price,
           description: product.description,
-          images: Array.isArray(product.images) ? product.images : [],
+          images: Array.isArray(product.images)
+            ? product.images.map((img: any) =>
+                typeof img === "string" ? img : img.url,
+              )
+            : [],
           categoryId: product.categoryId,
-          vendorId: product.vendorId,
+          vendorId: product.vendorId || "",
         },
       });
     } else {
-      // Clean baseline state when building new objects, auto-inject active vendor parameters if available
-      set({
-        isEditing: null,
-        formData: { 
-          title: "", 
-          stock: 0, 
-          price: 0, 
-          description: "", 
-          images: [], 
-          categoryId: "", 
-          vendorId: get().selectedVendorId || "" 
-        },
-      });
+      get().clearFormData();
+      set({ isEditing: null });
     }
   },
 
-  // --- CRUD OPERATIONS ---
-  addProduct: async (vendorId: string) => {
-    const { formData, fetchProducts } = get();
-    if (!formData.title?.trim()) throw new Error("Title is required");
+  addProduct: async (vendorId?: string) => {
+    const { formData, selectedVendorId, fetchProducts, fetchVendorProducts } =
+      get();
 
-    set({ isLoading: true });
+    // 1. Determine the source of truth for the vendorId
+    const targetVendorId = vendorId || selectedVendorId;
+
+    if (!targetVendorId) {
+      set({ error: "Cannot add product: No vendor selected." });
+      return;
+    }
+
+    set({ isLoading: true, error: null });
+
     try {
       const payload = {
         ...formData,
-        vendorId,
-        price: Number(formData.price),
-        stock: Number(formData.stock),
+        vendorId: targetVendorId,
+        price: Number(formData.price) || 0,
+        stock: Number(formData.stock) || 0,
       };
 
       await productService.createProduct(payload);
-      set({ isEditing: null });
-      await fetchProducts({ vendorId });
-    } catch (err) {
-      set({ isLoading: false });
-      throw err;
-    }
-  },
 
-  getVendorId: () => {
-    const { products, selectedVendorId } = get();
-    if (selectedVendorId) return selectedVendorId;
-    const vendorIdFromProducts = products.find(p => p.vendorId)?.vendorId;
-    return vendorIdFromProducts || null;
+      // 2. Refresh the list based on the active view
+      if (selectedVendorId) {
+        await fetchVendorProducts(selectedVendorId);
+      } else {
+        await fetchProducts();
+      }
+
+      // 3. Clear form on success
+      get().clearFormData();
+    } catch (err) {
+      set({ error: "Failed to save product. Please try again." });
+    } finally {
+      set({ isLoading: false, isEditing: null });
+    }
   },
 
   updateProduct: async (id: string) => {
-    const { formData, fetchProducts, isEditing } = get();
-    set({ isLoading: true });
+    const { formData, fetchProducts, fetchVendorProducts, selectedVendorId } =
+      get();
+
+    set({ isLoading: true, error: null });
+
     try {
+      // 1. Prepare and sanitize payload
       const payload = {
         ...formData,
-        price: Number(formData.price),
-        stock: Number(formData.stock),
+        price: Number(formData.price) || 0,
+        stock: Number(formData.stock) || 0,
       };
 
+      // 2. Execute service mutation
       await productService.updateProduct(id, payload);
-      set({ isEditing: null });
-      await fetchProducts({ vendorId: isEditing?.vendorId });
+
+      // 3. Re-sync state based on current context
+      if (selectedVendorId) {
+        await fetchVendorProducts(selectedVendorId);
+      } else {
+        await fetchProducts();
+      }
+
+      // 4. Cleanup UI state
+      get().clearFormData();
     } catch (err) {
-      set({ isLoading: false });
-      throw err;
+      set({
+        error:
+          "Failed to update product. Please check your network and try again.",
+      });
+    } finally {
+      set({ isLoading: false, isEditing: null });
     }
   },
 
-  removeProduct: async (id: string) => {
-    const { fetchProducts, products } = get();
-    const productToDelete = products.find((p) => p.id === id);
-    const vId = productToDelete?.vendorId;
-
+  removeProduct: async (id) => {
     set({ isLoading: true });
     try {
       await productService.deleteProduct(id);
-      await fetchProducts({ vendorId: vId });
-    } catch (err) {
-      set({ error: "Failed to delete product", isLoading: false });
-      throw err;
+      await get().fetchProducts();
+    } finally {
+      set({ isLoading: false });
     }
   },
 
-  clearFormData: () => {
+  clearFormData: () =>
     set({
       formData: {
         title: "",
@@ -303,13 +302,15 @@ export const useProductStore = create<ProductState>((set, get) => ({
         description: "",
         images: [],
         categoryId: "",
-        vendorId: ""
-      }
-    });
-  },
+        vendorId: get().selectedVendorId || "",
+      },
+    }),
 
   clearFilters: () => {
     set({ searchQuery: "", selectedCategory: null, selectedVendorId: null });
     get().fetchProducts();
-  }
+  },
+
+  getVendorId: () =>
+    get().selectedVendorId || get().products[0]?.vendorId || null,
 }));
