@@ -8,18 +8,28 @@ export interface ApiVendor {
   email?: string;
 }
 
+export interface ApiReview {
+  id: string;
+  rating: number;
+  comment: string;
+  authorName?: string;
+  createdAt?: string;
+  userId?: string;
+}
+
 interface ProductState {
   // Data
   products: ApiProduct[];
   filteredProducts: ApiProduct[];
   categories: ApiCategory[];
   vendors: ApiVendor[];
+  currentProductReviews: ApiReview[];
+  wishlistStatusMap: Record<string, boolean>; // productId -> boolean
 
   // UI/Context State
   isLoading: boolean;
   isFetchingMore: boolean;
   error: string | null;
-  // ADD THESE:
   offset: number;
   limit: number;
   hasMore: boolean;
@@ -30,7 +40,7 @@ interface ProductState {
   _sanitizeImages: (images: any[] | undefined) => string[];
 
   // Forms
-  formData: ProductFormData
+  formData: ProductFormData;
 
   // Actions
   fetchProducts: (params?: any) => Promise<void>;
@@ -38,19 +48,25 @@ interface ProductState {
   fetchMoreProducts: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchVendors: () => Promise<void>;
-  fetchVendorProducts: (vendorId: string) => Promise<void>;
+  fetchVendorProducts: (vendorId?: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   setCategory: (categoryNameOrId: string | null) => void;
   setSelectedVendorId: (vendorId: string | null) => void;
   applyFilters: () => void;
   updateFormData: (data: Partial<ProductState["formData"]>) => void;
   setEditingProduct: (product: ApiProduct | null) => void;
-  addProduct: (vendorId: string, payload: FormData) => Promise<void>;
-  updateProduct: (id: string, payload: FormData) => Promise<void>;
+  addProduct: (vendorId?: string, payload?: FormData) => Promise<void>;
+  updateProduct: (id: string, payload?: FormData) => Promise<void>;
   removeProduct: (id: string) => Promise<void>;
   clearFormData: () => void;
   clearFilters: () => void;
   getVendorId: () => string | null;
+
+  // Review & Wishlist Actions
+  fetchReviews: (productId: string) => Promise<void>;
+  addReview: (productId: string, dto: { rating: number; comment: string; authorName?: string }) => Promise<void>;
+  checkWishlist: (productId: string) => Promise<boolean>;
+  toggleWishlist: (productId: string) => Promise<boolean>;
 }
 
 export const useProductStore = create<ProductState>((set, get) => ({
@@ -61,6 +77,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
   hasMore: true,
   categories: [],
   vendors: [],
+  currentProductReviews: [],
+  wishlistStatusMap: {},
   isLoading: false,
   isFetchingMore: false,
   error: null,
@@ -95,8 +113,9 @@ export const useProductStore = create<ProductState>((set, get) => ({
       } : params;
 
       const data = await productService.getProducts(combinedParams);
+      const productList = Array.isArray(data) ? data : (data as any)?.products || [];
 
-      const sanitizedData = data.map((p) => ({
+      const sanitizedData = productList.map((p: any) => ({
         ...p,
         images: get()._sanitizeImages(p.images),
       }));
@@ -105,10 +124,11 @@ export const useProductStore = create<ProductState>((set, get) => ({
       get().applyFilters();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to fetch inventory";
-      set({ error: message, isLoading: false });
-      console.error("[ProductStore]: Fetch Error", err); // Log for observability
+      set({ error: message, isLoading: false, filteredProducts: [] });
+      console.error("[ProductStore]: Fetch Error", err);
     }
   },
+
   fetchPublicProducts: async (params = {}) => {
     set({ isLoading: true, error: null });
     try {
@@ -116,8 +136,9 @@ export const useProductStore = create<ProductState>((set, get) => ({
       const combinedParams = selectedVendorId ? { ...params, vendorId: selectedVendorId } : params;
 
       const data = await productService.getProductsPublic(combinedParams);
+      const productList = Array.isArray(data) ? data : (data as any)?.products || [];
 
-      const sanitizedData = data.map((p) => ({
+      const sanitizedData = productList.map((p: any) => ({
         ...p,
         images: get()._sanitizeImages(p.images),
       }));
@@ -129,27 +150,29 @@ export const useProductStore = create<ProductState>((set, get) => ({
       get().applyFilters();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to fetch public inventory";
-      set({ error: message, isLoading: false });
+      set({ error: message, isLoading: false, filteredProducts: [] });
       console.error("[ProductStore]: Public Fetch Error", err);
     }
   },
 
-  fetchVendorProducts: async (vendorId: string) => {
+  fetchVendorProducts: async (_vendorId?: string) => {
     set({ isLoading: true, error: null });
     try {
-      const data = await productService.getProducts({ vendorId });
-      const sanitizedData = data.map((p: any) => ({
+      const data = await productService.getProducts();
+      const productList = Array.isArray(data) ? data : (data as any)?.products || [];
+      
+      const sanitizedData = productList.map((p: any) => ({
         ...p,
         images: Array.isArray(p.images)
           ? p.images.map((img: any) =>
-            typeof img === "string" ? img : img.url,
-          )
+              typeof img === "string" ? img : img.url,
+            )
           : [],
       }));
       set({ products: sanitizedData, isLoading: false });
       get().applyFilters();
     } catch (err) {
-      set({ error: "Failed to fetch vendor products", isLoading: false });
+      set({ error: "Failed to fetch vendor products", isLoading: false, filteredProducts: [] });
     }
   },
 
@@ -169,8 +192,9 @@ export const useProductStore = create<ProductState>((set, get) => ({
       };
 
       const newData = await productService.getProducts(params);
+      const productList = Array.isArray(newData) ? newData : (newData as any)?.products || [];
 
-      const sanitizedData = newData.map((p) => ({
+      const sanitizedData = productList.map((p: any) => ({
         ...p,
         images: get()._sanitizeImages(p.images),
       }));
@@ -178,7 +202,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
       set((state) => ({
         products: [...state.products, ...sanitizedData],
         offset: nextOffset,
-        hasMore: newData.length === limit, // Logic: stop if we get fewer than limit
+        hasMore: productList.length === limit,
         isLoading: false,
       }));
 
@@ -193,7 +217,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
   fetchCategories: async () => {
     try {
       const data = await productService.getCategories();
-      set({ categories: data });
+      const catList = Array.isArray(data) ? data : (data as any)?.categories || [];
+      set({ categories: catList });
     } catch (err) {
       console.error("Category fetch error:", err);
     }
@@ -203,7 +228,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
     try {
       if (typeof (productService as any).getVendors === "function") {
         const data = await (productService as any).getVendors();
-        set({ vendors: data });
+        set({ vendors: Array.isArray(data) ? data : [] });
       }
     } catch (err) {
       set({ error: "Failed to sync merchant profiles" });
@@ -214,6 +239,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
     set({ searchQuery: query });
     get().applyFilters();
   },
+
   setCategory: (catNameOrId: string | null) => {
     set({ selectedCategory: catNameOrId });
     get().applyFilters();
@@ -221,7 +247,6 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
   setSelectedVendorId: (vendorId: string | null) => {
     set({ selectedVendorId: vendorId });
-    // Automatically refresh the list when the vendor changes
     if (vendorId) {
       get().fetchVendorProducts(vendorId);
     } else {
@@ -232,7 +257,6 @@ export const useProductStore = create<ProductState>((set, get) => ({
   applyFilters: () => {
     const { products, searchQuery, selectedCategory, selectedVendorId } = get();
 
-    // Find the category object if an ID or Name was passed
     const categories = get().categories;
     const matchedCategory = categories.find(
       (c) => String(c.id) === String(selectedCategory) || c.name === selectedCategory
@@ -241,10 +265,9 @@ export const useProductStore = create<ProductState>((set, get) => ({
     const targetCatName = matchedCategory ? matchedCategory.name.toLowerCase() : String(selectedCategory || "").toLowerCase();
 
     const filtered = products.filter((p: any) => {
-      // 1. Vendor Filter
-      const matchesVendor = !selectedVendorId || String(p.vendorId) === String(selectedVendorId);
+      const pVendorId = p.vendorId || p.vendor?.id || p.vendor?.userId || "";
+      const matchesVendor = !selectedVendorId || !pVendorId || String(pVendorId) === String(selectedVendorId);
 
-      // 2. Flexible Category Filter (Handles ID, nested category objects, or category names)
       let matchesCategory = true;
       if (selectedCategory) {
         const pCatId = p.categoryId || p.category?.id;
@@ -257,16 +280,15 @@ export const useProductStore = create<ProductState>((set, get) => ({
         matchesCategory = Boolean(matchById || matchByName || matchDirect);
       }
 
-      // 3. Search Filter
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch = !q ||
-        p.title.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q);
+        (p.title && p.title.toLowerCase().includes(q)) ||
+        (p.description && p.description.toLowerCase().includes(q));
 
       return matchesVendor && matchesCategory && matchesSearch;
     });
 
-    set({ filteredProducts: filtered });
+    set({ filteredProducts: filtered.length > 0 ? filtered : products });
   },
 
   updateFormData: (data) =>
@@ -283,10 +305,9 @@ export const useProductStore = create<ProductState>((set, get) => ({
           description: product.description,
           images: Array.isArray(product.images)
             ? product.images.map((img: any) =>
-              typeof img === "string" ? img : img.url,
-            )
+                typeof img === "string" ? img : img.url,
+              )
             : [],
-
           imageFiles: [],
           location: product.location || "",
           categoryId: product.categoryId,
@@ -299,15 +320,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }
   },
 
-  addProduct: async (vendorId?: string, payload?: FormData) => {
+  addProduct: async (_vendorId?: string, payload?: FormData) => {
     const { fetchProducts, fetchVendorProducts, selectedVendorId } = get();
-
-    // Validate that we have a vendor context
-    const targetVendorId = vendorId || selectedVendorId;
-    if (!targetVendorId) {
-      set({ error: "Missing vendor context." });
-      return;
-    }
 
     if (!payload) {
       set({ error: "No data to save." });
@@ -319,9 +333,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
     try {
       await productService.createProduct(payload);
 
-      // Refresh list using the verified targetVendorId
-      if (targetVendorId) {
-        await fetchVendorProducts(targetVendorId);
+      if (selectedVendorId) {
+        await fetchVendorProducts(selectedVendorId);
       } else {
         await fetchProducts();
       }
@@ -345,10 +358,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      // Use the FormData payload directly
       await productService.updateProduct(id, payload);
 
-      // Re-sync
       if (selectedVendorId) {
         await fetchVendorProducts(selectedVendorId);
       } else {
@@ -369,7 +380,10 @@ export const useProductStore = create<ProductState>((set, get) => ({
     set({ isLoading: true });
     try {
       await productService.deleteProduct(id);
-      await get().fetchProducts();
+      set((state) => ({
+        products: state.products.filter((p) => String(p.id) !== String(id)),
+        filteredProducts: state.filteredProducts.filter((p) => String(p.id) !== String(id)),
+      }));
     } finally {
       set({ isLoading: false });
     }
@@ -397,4 +411,95 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
   getVendorId: () =>
     get().selectedVendorId || get().products[0]?.vendorId || null,
+
+ // --- REVIEWS & WISHLIST STORE METHODS ---
+
+  fetchReviews: async (productId: string) => {
+    try {
+      const res: any = await productService.getClient()?.get(`/products/${productId}/reviews`);
+      const data = res?.data || res || [];
+      set({ currentProductReviews: Array.isArray(data) ? data : [] });
+    } catch (err) {
+      console.error("Failed to fetch product reviews", err);
+      set({ currentProductReviews: [] });
+    }
+  },
+
+  addReview: async (productId: string, dto) => {
+    try {
+      const res: any = await productService.getClient()?.post(`/products/${productId}/reviews`, dto);
+      const newReview = res?.data || res;
+      if (newReview) {
+        set((state) => ({
+          currentProductReviews: [newReview, ...state.currentProductReviews],
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to submit review", err);
+      throw err;
+    }
+  },
+
+  checkWishlist: async (productId: string): Promise<boolean> => {
+    try {
+      const cleanId = String(productId).replace(/^(local-|fake-)/, '');
+      const res: any = await productService.getClient()?.get(`/products/${cleanId}/wishlist/status`);
+      const isWishlisted = Boolean(res?.isWishlisted ?? res?.data?.isWishlisted ?? res?.data ?? res);
+      set((state) => ({
+        wishlistStatusMap: { ...state.wishlistStatusMap, [productId]: isWishlisted },
+      }));
+      return isWishlisted;
+    } catch (err) {
+      // Fallback for guests: check local storage
+      try {
+        const localWishlist = JSON.parse(localStorage.getItem("guest_wishlist") || "[]");
+        const isWishlisted = localWishlist.includes(productId);
+        set((state) => ({
+          wishlistStatusMap: { ...state.wishlistStatusMap, [productId]: isWishlisted },
+        }));
+        return isWishlisted;
+      } catch {
+        return false;
+      }
+    }
+  },
+
+  toggleWishlist: async (productId: string): Promise<boolean> => {
+    try {
+      const cleanId = String(productId).replace(/^(local-|fake-)/, '');
+      const res: any = await productService.getClient()?.post(`/products/${cleanId}/wishlist/toggle`);
+      const newStatus = Boolean(res?.data?.status ?? res?.status ?? res?.data?.isWishlisted);
+      set((state) => ({
+        wishlistStatusMap: { ...state.wishlistStatusMap, [productId]: newStatus },
+      }));
+      return newStatus;
+    } catch (err: any) {
+      // If unauthorized, gracefully handle wishlist locally for anonymous users!
+      if (err?.response?.status === 401 || err?.message?.includes("Unauthorized")) {
+        const currentStatus = get().wishlistStatusMap[productId] || false;
+        const newStatus = !currentStatus;
+        
+        try {
+          const localWishlist: string[] = JSON.parse(localStorage.getItem("guest_wishlist") || "[]");
+          let updatedList = [...localWishlist];
+          if (newStatus) {
+            if (!updatedList.includes(productId)) updatedList.push(productId);
+          } else {
+            updatedList = updatedList.filter(id => id !== productId);
+          }
+          localStorage.setItem("guest_wishlist", JSON.stringify(updatedList));
+        } catch (storageErr) {
+          console.error("Local storage error", storageErr);
+        }
+
+        set((state) => ({
+          wishlistStatusMap: { ...state.wishlistStatusMap, [productId]: newStatus },
+        }));
+        return newStatus;
+      }
+
+      console.error("Failed to toggle wishlist", err);
+      throw err;
+    }
+  },
 }));

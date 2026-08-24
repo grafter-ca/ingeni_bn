@@ -8,4 +8,5 @@ export const OrderClient = {
   getVendorOrders: orderClient.getVendorOrders,
   getAllOrders: orderClient.getAllOrders,
   updateStatus: orderClient.updateStatus,
+  updatePaymentStatus: orderClient.updatePaymentStatus, 
 };

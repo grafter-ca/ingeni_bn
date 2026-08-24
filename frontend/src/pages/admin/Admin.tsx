@@ -4,6 +4,7 @@ import { useAuthActions } from "../../context/AuthContext";
 import { Users, Package, ShoppingCart, ArrowUpRight } from "lucide-react";
 import StatCard from "../../features/admin/home/StatCard";
 import { useOrderStore } from "../../store/useOrderStore";
+import { TrafficAnalyticsCard } from "../../components/admin/TrafficAnalyticsCard"; // <-- Imported here
 
 function Admin() {
   // 1. Destructure BOTH the trigger function AND the actual raw array values
@@ -12,8 +13,6 @@ function Admin() {
   const { admin } = useAuthActions();    
   const [loading, setLoading] = useState(true);
   const [userCount, setUserCount] = useState(0);
-
-
 
   useEffect(() => {
     const init = async () => {
@@ -34,30 +33,34 @@ function Admin() {
     init();
   }, [admin, fetchProducts, fetchAllOrders]);
 
-
   // Keep the dashboard stats in real-time sync with changes to store arrays
   useEffect(() => {
     setUserCount(prev => prev);
   }, [userCount]);
 
-  console.log("Admin Dashboard Rendered: ", { products, orders, userCount });
-  //show products 
-  console.log("Products: ", products);
-
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
       {/* Header Section */}
-     <div className="flex justify-between items-end">
+      <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold tracking-tighter text-white uppercase">Core Overview</h1>
           <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] mt-1">System Intelligence & Resource Management</p>
         </div>
       </div>
 
+      {/* Core Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard title="Total Users" value={loading ? "..." : userCount} icon={<Users size={20} />} color="text-blue-500" />
         <StatCard title="Inventory Assets" value={loading ? "..." : products.length} icon={<Package size={20} />} color="text-purple-500" />
         <StatCard title="Processed Orders" value={loading ? "..." : orders.length} icon={<ShoppingCart size={20} />} color="text-amber-500" />
+      </div>
+
+      {/* Traffic Analytics Graph/Card Section */}
+      <div className="space-y-4">
+        <h3 className="text-[10px] font-black text-gray-700 uppercase tracking-[0.4em] ml-2">Customer Engagement Analytics</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <TrafficAnalyticsCard vendorId="global-store" vendorName="Platform Overall" />
+        </div>
       </div>
 
       {/* Operational Quick Links */}

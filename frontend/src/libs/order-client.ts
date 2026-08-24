@@ -53,24 +53,24 @@ export const OrderClient = {
   },
 
   // --- UPDATE ORDER STATUS ---
- async updateStatus(orderId: string, status: string): Promise<Order> {
-  try {
-    const payload = { status: status.toUpperCase() };
-    return await localApi.patch<Order>(`/orders/${orderId}/status`, payload);
-  } catch (error: any) {
-    // EXPANDED DEBUGGING
-    if (error.response) {
-      // The server responded with a status code outside of 2xx
-      console.error("Server Error Data:", error.response.data);
-      console.error("Status Code:", error.response.status);
-    } else if (error.request) {
-      // The request was made but no response was received
-      console.error("No Response Received:", error.request);
-    } else {
-      // Something happened in setting up the request
-      console.error("Request Setup Error:", error.message);
+  async updateStatus(orderId: string, status: string): Promise<Order> {
+    try {
+      const payload = { status: status.toUpperCase() };
+      return await localApi.patch<Order>(`/orders/${orderId}/status`, payload);
+    } catch (error: any) {
+      console.error("Status Update Error:", error?.response?.data || error.message);
+      throw new Error(error?.response?.data?.message || "Failed to update order status.");
     }
-    throw new Error(error?.response?.data?.message || "Failed to update order status.");
-  }
-}
+  },
+
+  // 🔥 --- UPDATE PAYMENT STATUS (Added) ---
+  async updatePaymentStatus(orderId: string, paymentStatus: string): Promise<Order> {
+    try {
+      const payload = { paymentStatus: paymentStatus.toUpperCase() };
+      return await localApi.patch<Order>(`/orders/${orderId}/payment-status`, payload);
+    } catch (error: any) {
+      console.error("Payment Status Update Error:", error?.response?.data || error.message);
+      throw new Error(error?.response?.data?.message || "Failed to update payment status.");
+    }
+  },
 };

@@ -46,10 +46,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (error) dispatch({ type: "LOGIN_ERROR", payload: error.message || "Login Failed" });
   }, []);
 
-  const register = useCallback(async (payload: RegisterPayloadProps) => {
+const register = useCallback(async (payload: RegisterPayloadProps) => {
     dispatch({ type: "LOGIN_START" });
-    const { error } = await authService.signUp(payload);
-    if (error) dispatch({ type: "LOGIN_ERROR", payload: error.message || "Login Failed" });
+    const response = await authService.signUp(payload);
+    
+    if (response?.error) {
+      dispatch({ type: "LOGIN_ERROR", payload: response.error.message || "Registration Failed" });
+      throw new Error(response.error.message || "Registration Failed");
+    }
   }, []);
 
   const logout = useCallback(async () => {

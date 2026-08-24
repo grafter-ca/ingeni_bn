@@ -1,13 +1,13 @@
 // Home feature components
-import Hero            from "../features/home/Hero";
+import Hero from "../features/home/Hero";
 import CategoryShowcase from "../features/home/CategoryShowcase";
 import FeaturedProducts from "../features/home/FeaturedProducts";
-import HowItWorks      from "../features/home/HowItWorks";
-import CallToAction    from "../features/home/CallToAction";
+import HowItWorks from "../features/home/HowItWorks";
+import CallToAction from "../features/home/CallToAction";
 
 const Home = () => {
   return (
-    <div className="min-h-screen bg-gray-900 text-white font-poppins">
+    <div className="min-h-screen bg-white dark:bg-background text-zinc-900 dark:text-white font-poppins transition-colors">
 
       {/* ── 1. Hero ── */}
       <Hero />

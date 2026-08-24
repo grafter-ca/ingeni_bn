@@ -13,3 +13,10 @@ export type StatCardProps = {
   color: string;
 };
 
+export interface TrafficStat {
+  actionType: 'whatsapp' | 'call';
+  _count: {
+    id: number;
+  };
+}
+

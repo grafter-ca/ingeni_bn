@@ -8,15 +8,12 @@ export const authService = {
       email: data.email,
       password: data.password,
       name: data.name,
-      ...{
-        phone: data.phone,
-        country: data.country,
-      },
+      phone: data.phone,
+      country: data.country,
       image:
         data.image ??
         `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.name}`,
-      callbackURL: "/login",
-    });
+    } as any);
   },
 
   signIn: async (data: LoginPayload, captchaToken?: string) => {

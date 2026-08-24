@@ -1,27 +1,7 @@
 // src/services/vendorService.ts
 import { apiClient } from "../libs/vendor.client"; 
 import type { ApiOrder, VendorMetrics, ApiVendor } from "../types";
-
-interface VendorStats {
-  revenue: number;
-  activeOrders: number;
-  productCount: number;
-}
-
-export interface OnboardingRequest {
-  id: string;
-  userId: string;
-  storeName?: string;
-  businessDescription?: string;
-  description?: string;
-  address?: string;
-  phone?: string;
-  user?: {
-    name?: string;
-    email: string;
-  };
-  submittedAt?: string;
-}
+import type { OnboardingRequest, VendorStats } from "../store/vendorStore";
 
 export const vendorService = {
   getVendors: async (params?: Record<string, any>): Promise<ApiVendor[]> => {
@@ -40,17 +20,19 @@ export const vendorService = {
   },
 
   getVendorOrders: async (): Promise<ApiOrder[]> => {
-    const response = await apiClient.get(`/vendor/orders`);
+    const response = await apiClient.get(`/vendors/orders`).catch(() => ({ data: [] }));
     return response.data;
   },
 
   getStorefrontMetrics: async (): Promise<VendorStats> => {
-    const response = await apiClient.get(`/vendor/metrics`);
+    const response = await apiClient.get(`/vendors/metrics`).catch(() => ({
+      data: { revenue: 0, activeOrders: 0, productCount: 0 }
+    }));
     return response.data;
   },
 
-  updateOrderStatus: async (orderId: string, status: ApiOrder['status']): Promise<ApiOrder> => {
-    const response = await apiClient.patch(`/vendor/orders/${orderId}/status`, { status });
+  updateOrderStatus: async (orderId: string, status: ApiOrder['status'] | string): Promise<ApiOrder> => {
+    const response = await apiClient.patch(`/vendors/orders/${orderId}/status`, { status });
     return response.data;
   },
 
@@ -60,7 +42,7 @@ export const vendorService = {
   },
 
   updateVendor: async (id: string, payload: Partial<ApiVendor>): Promise<ApiVendor> => {
-    const response = await apiClient.put(`/vendors/${id}`, payload);
+    const response = await apiClient.patch(`/vendors/${id}`, payload);
     return response.data;
   },
 
@@ -80,7 +62,7 @@ export const vendorService = {
 
   // --- LIVE ONBOARDING REQUEST ENDPOINTS ---
   getPendingRequests: async (): Promise<OnboardingRequest[]> => {
-    const response = await apiClient.get(`/vendors/requests`);
+    const response = await apiClient.get(`/vendors/requests`).catch(() => ({ data: [] }));
     return response.data;
   },
 
@@ -91,5 +73,21 @@ export const vendorService = {
 
   rejectVendorRequest: async (requestId: string): Promise<void> => {
     await apiClient.delete(`/vendors/requests/${requestId}`);
+  },
+
+  // --- VENDOR SETTINGS & ADMIN COMMUNICATION ENDPOINTS ---
+  getVendorSettings: async (): Promise<any> => {
+    const response = await apiClient.get(`/vendors/settings`);
+    return response.data;
+  },
+
+  updateVendorSettings: async (payload: any): Promise<any> => {
+    const response = await apiClient.patch(`/vendors/settings`, payload);
+    return response.data;
+  },
+
+  submitAdminRequest: async (payload: { type: string; amount?: string; message: string }): Promise<any> => {
+    const response = await apiClient.post(`/vendors/admin-request`, payload);
+    return response.data;
   }
 };

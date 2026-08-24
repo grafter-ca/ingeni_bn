@@ -18,8 +18,8 @@ async function baseRequest<T>(
       ...options.headers,
     },
     body:isFormData ? options.body : JSON.stringify(options.body),
-    credentials: options.credentials || "omit",
-        // credentials: "include",
+    // credentials: options.credentials || "omit",
+    credentials: "include",
   });
 
   if (!response.ok) {

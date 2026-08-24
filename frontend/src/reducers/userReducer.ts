@@ -1,6 +1,7 @@
 import type { User } from "../types";
 
 export interface AuthState {
+  session: any; 
   user: User | null;
   isAuthenticated: boolean; // Added this
   isLoading: boolean;
@@ -8,6 +9,7 @@ export interface AuthState {
 }
 
 export const initialAuthState: AuthState = {
+  session : null,
   user: null,
   isAuthenticated: false,
   isLoading: true, // Start as true while checking session

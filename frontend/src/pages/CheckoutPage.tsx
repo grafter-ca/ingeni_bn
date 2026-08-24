@@ -1,3 +1,4 @@
+// src/pages/CheckoutPage.tsx
 import { useState } from "react";
 import { useCartStore } from "../store/cartStore";
 import { useOrderStore } from "../store/useOrderStore";
@@ -45,9 +46,9 @@ const CheckoutPage = () => {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-white">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#050505] font-poppins flex flex-col items-center justify-center text-gray-900 dark:text-white transition-colors duration-200">
         <h2 className="text-2xl font-bold mb-4">Your cart is empty</h2>
-        <Link to="/products" className="text-blue-500 hover:underline">
+        <Link to="/products" className="text-blue-600 dark:text-blue-500 hover:underline">
           Continue Shopping
         </Link>
       </div>
@@ -118,17 +119,17 @@ const CheckoutPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white py-10 px-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#050505] text-gray-900 dark:text-white py-10 px-6 font-poppins transition-colors duration-200">
       <div className="max-w-6xl mx-auto">
         {/* SUPPORT SECTION */}
-        <div className="mb-8 p-6 rounded-3xl bg-[#0a0a0a] border border-blue-500/20 flex flex-col md:flex-row justify-between gap-4">
+        <div className="mb-8 p-6 rounded-3xl bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-blue-500/25 flex flex-col md:flex-row justify-between gap-4 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-blue-600/10 text-blue-500">
+            <div className="p-3 rounded-2xl bg-blue-600/10 text-blue-600 dark:text-blue-500">
               <Headset size={24} />
             </div>
             <div>
-              <h2 className="font-bold text-blue-400">Need Help?</h2>
-              <p className="text-sm text-gray-400">
+              <h2 className="font-bold text-blue-600 dark:text-blue-400">Need Help?</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Contact our support team anytime.
               </p>
             </div>
@@ -137,7 +138,7 @@ const CheckoutPage = () => {
           <div className="flex gap-3">
             <a
               href={`tel:${supportTeam.phone}`}
-              className="px-4 py-2 rounded-xl bg-white/5 hover:bg-blue-600 transition flex items-center gap-2"
+              className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-blue-600 dark:hover:bg-blue-600 hover:text-white transition flex items-center gap-2 text-sm font-medium"
             >
               <Phone size={16} />
               Call
@@ -145,7 +146,7 @@ const CheckoutPage = () => {
 
             <a
               href={`mailto:${supportTeam.email}`}
-              className="px-4 py-2 rounded-xl bg-white/5 hover:bg-blue-600 transition flex items-center gap-2"
+              className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-blue-600 dark:hover:bg-blue-600 hover:text-white transition flex items-center gap-2 text-sm font-medium"
             >
               <MessageCircle size={16} />
               Email
@@ -159,12 +160,13 @@ const CheckoutPage = () => {
             <div className="flex items-center gap-3 mb-6">
               <button
                 onClick={() => navigate(-1)}
-                className="p-2 hover:bg-white/5 rounded-full"
+                className="p-2 hover:bg-gray-200 dark:hover:bg-white/5 rounded-full text-gray-700 dark:text-white transition-colors"
+                aria-label="Go back"
               >
                 <ArrowLeft size={22} />
               </button>
 
-              <h1 className="text-2xl font-black uppercase">
+              <h1 className="text-2xl font-black uppercase tracking-wide">
                 Checkout ({totalItems} items)
               </h1>
             </div>
@@ -183,8 +185,8 @@ const CheckoutPage = () => {
               }}
             />
 
-            <div className="mt-8 bg-[#0a0a0a] border border-white/5 rounded-3xl p-6">
-              <h3 className="text-xs uppercase tracking-widest text-gray-500 mb-4">
+            <div className="mt-8 bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-white/5 rounded-3xl p-6 shadow-sm">
+              <h3 className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-4 font-semibold">
                 Select Payment Method
               </h3>
 
@@ -214,10 +216,11 @@ const CheckoutPage = () => {
                         method.id as PaymentMethod
                       )
                     }
-                    className={`p-4 rounded-2xl border transition flex flex-col items-center gap-2 ${selectedPayment === method.id
-                      ? "bg-blue-600 border-blue-500 text-white"
-                      : "bg-[#050505] border-white/10 text-gray-400 hover:text-white"
-                      }`}
+                    className={`p-4 rounded-2xl border transition-all flex flex-col items-center gap-2 cursor-pointer ${
+                      selectedPayment === method.id
+                        ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20"
+                        : "bg-gray-50 dark:bg-[#050505] border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
                   >
                     <method.icon size={20} />
                     <span className="text-xs font-bold uppercase">
@@ -231,10 +234,10 @@ const CheckoutPage = () => {
 
           {/* RIGHT: Order Summary */}
           <div className="lg:col-span-5">
-            <div className="sticky top-20 bg-[#0a0a0a] border border-white/5 rounded-3xl p-8">
-              <h2 className="text-xl font-bold mb-6">Order Summary</h2>
+            <div className="sticky top-24 bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-white/5 rounded-3xl p-8 shadow-sm">
+              <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Order Summary</h2>
 
-              <div className="space-y-4 max-h-96 overflow-y-auto">
+              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                 {items.map((item) => (
                   <div
                     key={item.id}
@@ -243,11 +246,11 @@ const CheckoutPage = () => {
                     <img
                       src={item.image}
                       alt={item.name}
-                      className="w-16 h-16 rounded-xl object-cover"
+                      className="w-16 h-16 rounded-xl object-cover border border-gray-200 dark:border-white/10"
                     />
 
                     <div className="flex-1">
-                      <h3 className="font-medium text-sm">
+                      <h3 className="font-medium text-sm text-gray-900 dark:text-white line-clamp-1">
                         {item.name}
                       </h3>
                       <p className="text-xs text-gray-500">
@@ -255,7 +258,7 @@ const CheckoutPage = () => {
                       </p>
                     </div>
 
-                    <div className="font-semibold text-sm">
+                    <div className="font-semibold text-sm text-gray-900 dark:text-white">
                       RF{" "}
                       {(
                         item.price * item.quantity
@@ -265,23 +268,23 @@ const CheckoutPage = () => {
                 ))}
               </div>
 
-              <div className="border-t border-white/5 mt-8 pt-6 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Subtotal</span>
-                  <span>RF {total.toLocaleString()}</span>
+              <div className="border-t border-gray-200 dark:border-white/5 mt-8 pt-6 space-y-3">
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span>Subtotal</span>
+                  <span className="text-gray-900 dark:text-white font-medium">RF {total.toLocaleString()}</span>
                 </div>
 
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Tax (18%)</span>
-                  <span>RF {tax.toLocaleString()}</span>
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span>Tax (18%)</span>
+                  <span className="text-gray-900 dark:text-white font-medium">RF {tax.toLocaleString()}</span>
                 </div>
 
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Delivery</span>
-                  <span>RF {shipping.toLocaleString()}</span>
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span>Delivery</span>
+                  <span className="text-gray-900 dark:text-white font-medium">RF {shipping.toLocaleString()}</span>
                 </div>
 
-                <div className="flex justify-between text-lg font-bold border-t border-white/5 pt-4 text-blue-400">
+                <div className="flex justify-between text-lg font-bold border-t border-gray-200 dark:border-white/5 pt-4 text-blue-600 dark:text-blue-400">
                   <span>Total</span>
                   <span>RF {grandTotal.toLocaleString()}</span>
                 </div>
@@ -317,7 +320,7 @@ const CheckoutPage = () => {
                   }
                 }}
                 disabled={loading}
-                className="w-full mt-8 py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 font-bold uppercase transition disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full mt-8 py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 font-bold uppercase transition-colors text-white disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer text-sm tracking-wider"
               >
                 {loading ? "Processing..." : "Complete Purchase"}
               </button>

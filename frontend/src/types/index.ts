@@ -16,7 +16,7 @@ export interface LoginProps {
 }
 
 export interface ButtonProps {
-  label: string;
+  label: string | React.ReactNode;
   variant?: "primary" | "outline";
   className?: string;
   type?: "button" | "submit" | "reset";
@@ -45,6 +45,9 @@ export type User = {
   phone?: string;
   role?: "admin" | "vendor" | "user";
   country?: string;
+  location?: string;
+  storeName?: string;
+  address?: string;
 };
 
 export type CartItem = {
@@ -70,7 +73,8 @@ export type AuthAction =
   | { type: "LOGOUT" }
   | { type: "CLEAR_ERROR" };
 
-export interface VendorDashboardData {
+
+  export interface VendorDashboardData {
   stats: {
     revenue: string;
     activeOrders: number;
@@ -88,6 +92,8 @@ export interface ApiVendor {
   logoUrl?: string;
   storeName: string;
   isActive: boolean;
+  businessDescription?: string;
+  description?: string;
   createdAt: string;
   _count?: {
     products: number;
@@ -112,3 +118,14 @@ export interface ApiOrder {
   };
   createdAt: string;
 }
+
+
+export interface ReviewItem  {
+  id: string;
+  user: string;
+  rating: number;
+  comment: string;
+  createdAt?: string;
+  authorName?: string;
+  date: string;
+};

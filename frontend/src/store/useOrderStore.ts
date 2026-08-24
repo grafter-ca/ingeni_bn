@@ -25,7 +25,8 @@ interface OrderState {
   fetchVendorOrders: () => Promise<void>;
   fetchAllOrders: (status?: string) => Promise<void>;
   updateOrderStatus: (orderId: string, status: string) => Promise<Order>;
-  deleteOrder: (orderId: string) => Promise<void>; // Added delete action definition
+  updatePaymentStatus: (orderId: string, paymentStatus: string) => Promise<Order>; // 👈 Added action definition
+  deleteOrder: (orderId: string) => Promise<void>;
 }
 
 export const useOrderStore = create<OrderState>((set, get) => ({
@@ -51,7 +52,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     } else {
       set({
         filteredOrders: orders.filter(
-          (order) => order.status?.toLowerCase() === statusFilter.toLowerCase()
+          (order) => order.status?.trim().toUpperCase() === statusFilter.trim().toUpperCase()
         ),
       });
     }
@@ -145,23 +146,47 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       throw err;
     }
   },
-  // deleteOrder is now a cancellation that updates the order status to "CANCELLED"
-deleteOrder: async (orderId) => {
-  try {
-    set({ loading: true, error: null });
-    
-    // Instead of actual deletion, always treat this as a cancellation
-    const updatedOrder = await OrderClient.updateStatus(orderId, "CANCELLED");
 
-    set((state) => ({
-      orders: state.orders.map((o) => (o.id === orderId ? updatedOrder : o)),
-      loading: false,
-    }));
-    
-    get().applyFilters();
-  } catch (err: any) {
-    set({ error: "Failed to cancel order", loading: false });
-    throw err;
-  }
-}
+  // --- UPDATE PAYMENT STATUS ---
+  updatePaymentStatus: async (orderId, paymentStatus) => {
+    try {
+      set({ loading: true, error: null });
+      // Assumes your OrderClient has a corresponding payment status update method, 
+      // or you can route it through a generic patch endpoint if configured.
+      const updatedOrder = await OrderClient.updatePaymentStatus
+        ? await OrderClient.updatePaymentStatus(orderId, paymentStatus)
+        : await OrderClient.updateStatus(orderId, paymentStatus); // Fallback if handled via general update
+      
+      set((state) => ({
+        orders: state.orders.map((o) => (o.id === orderId ? updatedOrder : o)),
+        currentOrder: state.currentOrder?.id === orderId ? updatedOrder : state.currentOrder,
+        loading: false,
+      }));
+      
+      get().applyFilters();
+      return updatedOrder;
+    } catch (err: any) {
+      set({ error: err?.message || "Failed to update payment status", loading: false });
+      throw err;
+    }
+  },
+
+  // --- CANCEL ORDER ---
+  deleteOrder: async (orderId) => {
+    try {
+      set({ loading: true, error: null });
+      
+      const updatedOrder = await OrderClient.updateStatus(orderId, "CANCELLED");
+
+      set((state) => ({
+        orders: state.orders.map((o) => (o.id === orderId ? updatedOrder : o)),
+        loading: false,
+      }));
+      
+      get().applyFilters();
+    } catch (err: any) {
+      set({ error: "Failed to cancel order", loading: false });
+      throw err;
+    }
+  },
 }));

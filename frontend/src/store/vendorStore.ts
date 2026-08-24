@@ -1,7 +1,7 @@
 // src/store/vendorStore.ts
 import { create } from "zustand";
 import { vendorService } from "../services/vendorService";
-import type { ApiVendor, VendorMetrics } from "../types";
+import type { ApiVendor, VendorMetrics, ApiOrder } from "../types";
 import { socket } from "../libs/socket.client";
 
 export interface Order {
@@ -30,6 +30,7 @@ export interface OnboardingRequest {
   address?: string;
   phone?: string;
   user?: {
+    id?: string;
     name?: string;
     email: string;
   };
@@ -48,6 +49,7 @@ interface VendorState {
   stats: VendorStats | null;
   pendingRequests: OnboardingRequest[];
   isLoadingRequests: boolean;
+  vendorSettings: any | null;
 
   searchQuery: string;
   statusFilter: "all" | "active" | "inactive";
@@ -60,13 +62,17 @@ interface VendorState {
   fetchPendingRequests: () => Promise<void>;
   fetchVendorDashboardData: () => Promise<void>;
   fetchStorefrontMetrics: () => Promise<void>;
-  
+  fetchVendorSettings: () => Promise<void>;
+  updateVendorSettings: (payload: any) => Promise<void>;
+  submitAdminRequest: (payload: { type: string; amount?: string; message: string }) => Promise<void>;
+
   setSearchQuery: (query: string) => void;
   setStatusFilter: (status: "all" | "active" | "inactive") => void;
   applyFilters: () => void;
-  
+
   updateFormData: (data: Partial<VendorState["formData"]>) => void;
   setEditingVendor: (vendor: ApiVendor | null) => void;
+  initSocketListeners: () => void;
 
   addVendor: () => Promise<void>;
   updateVendor: (id: string) => Promise<void>;
@@ -74,18 +80,10 @@ interface VendorState {
   toggleVendorStatus: (id: string, currentStatus: boolean) => Promise<void>;
   approveVendorRequest: (requestData: { userId: string; storeName: string; description: string; address: string; phone: string }) => Promise<void>;
   rejectVendorRequest: (requestId: string) => Promise<void>;
-  updateOrderStatus: (orderId: string, nextStatus: Order['status']) => Promise<void>;
+  updateOrderStatus: (orderId: string, nextStatus: Order['status'] | string) => Promise<void>;
   requestOnboarding: (description: string) => Promise<void>;
   clearFilters: () => void;
 }
-
-export const initializeSocketListeners = ( set: any) => {
-  socket.on('vendor:request-created', (newRequest) => {
-    set((state: any) => ({
-      pendingRequests: [newRequest, ...state.pendingRequests]
-    }));
-  });
-};
 
 export const useVendorStore = create<VendorState>((set, get) => ({
   vendors: [],
@@ -99,16 +97,19 @@ export const useVendorStore = create<VendorState>((set, get) => ({
   stats: null,
   pendingRequests: [],
   isLoadingRequests: false,
-  
+  vendorSettings: null,
+
   searchQuery: "",
   statusFilter: "all",
-  
+
   isEditing: null,
   formData: {
     name: "",
     email: "",
     phone: "",
     storeName: "",
+    description: "",
+    businessDescription: "",
     logoUrl: "",
     isActive: true,
   },
@@ -128,7 +129,7 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     set({ isLoading: true, error: null, activeMetrics: null });
     try {
       const [profile, metrics] = await Promise.all([
-        vendorService.getVendorById(id),  
+        vendorService.getVendorById(id),
         vendorService.getVendorMetrics(id)
       ]);
       set({ selectedVendor: profile, activeMetrics: metrics, isLoading: false });
@@ -140,8 +141,7 @@ export const useVendorStore = create<VendorState>((set, get) => ({
   fetchPendingRequests: async () => {
     set({ isLoadingRequests: true });
     try {
-      // Connects to your backend endpoint for pending user onboarding requests
-      const data = await vendorService.getPendingRequests?.() || [];
+      const data = await vendorService.getPendingRequests();
       set({ pendingRequests: data, isLoadingRequests: false });
     } catch (err) {
       console.error("Failed to fetch pending requests", err);
@@ -153,8 +153,8 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const [ordersData, metricsData] = await Promise.all([
-        vendorService.getVendorOrders?.() || Promise.resolve([]),
-        vendorService.getStorefrontMetrics?.() || Promise.resolve(null)
+        vendorService.getVendorOrders(),
+        vendorService.getStorefrontMetrics()
       ]);
 
       const mappedStats: VendorStats = metricsData || {
@@ -171,10 +171,39 @@ export const useVendorStore = create<VendorState>((set, get) => ({
 
   fetchStorefrontMetrics: async () => {
     try {
-      const stats = await vendorService.getStorefrontMetrics();
-      set({ stats });
+      const data = await vendorService.getStorefrontMetrics();
+      set({ stats: data });
+    } catch (error) {
+      console.error("Failed to fetch storefront metrics", error);
+    }
+  },
+
+  fetchVendorSettings: async () => {
+    try {
+      set({ isLoading: true, error: null });
+      const data = await vendorService.getVendorSettings();
+      set({ vendorSettings: data, isLoading: false });
     } catch (err: any) {
-      console.error("Failed to fetch storefront metrics", err);
+      set({ error: err.message || "Failed to load store configurations", isLoading: false });
+    }
+  },
+
+  updateVendorSettings: async (payload) => {
+    try {
+      set({ isLoading: true, error: null });
+      const updated = await vendorService.updateVendorSettings(payload);
+      set({ vendorSettings: updated, isLoading: false });
+    } catch (err: any) {
+      set({ error: err.message || "Failed to update configurations", isLoading: false });
+      throw err;
+    }
+  },
+
+  submitAdminRequest: async (payload) => {
+    try {
+      await vendorService.submitAdminRequest(payload);
+    } catch (err: any) {
+      throw err;
     }
   },
 
@@ -221,6 +250,8 @@ export const useVendorStore = create<VendorState>((set, get) => ({
           name: vendor.name,
           email: vendor.email,
           phone: vendor.phone || "",
+          description: vendor.description || "",
+          businessDescription: vendor.businessDescription || "",
           storeName: vendor.storeName,
           logoUrl: vendor.logoUrl || "",
           isActive: vendor.isActive,
@@ -234,9 +265,21 @@ export const useVendorStore = create<VendorState>((set, get) => ({
           email: "",
           phone: "",
           storeName: "",
+          description: "",
+          businessDescription: "",
           logoUrl: "",
           isActive: true,
         }
+      });
+    }
+  },
+
+  initSocketListeners: () => {
+    if (!socket.hasListeners('vendor:request-created')) {
+      socket.on('vendor:request-created', (newRequest: OnboardingRequest) => {
+        set((state) => ({
+          pendingRequests: [newRequest, ...state.pendingRequests.filter((r) => r.id !== newRequest.id)]
+        }));
       });
     }
   },
@@ -294,9 +337,9 @@ export const useVendorStore = create<VendorState>((set, get) => ({
 
   toggleVendorStatus: async (id, currentStatus) => {
     try {
-      await vendorService.updateVendor(id, { isActive: !currentStatus });
+      await vendorService.toggleVendorStatus(id, currentStatus);
       set((state) => {
-        const updated = state.vendors.map((v) => 
+        const updated = state.vendors.map((v) =>
           v.id === id ? { ...v, isActive: !currentStatus } : v
         );
         return { vendors: updated };
@@ -310,18 +353,7 @@ export const useVendorStore = create<VendorState>((set, get) => ({
   approveVendorRequest: async (requestData) => {
     set({ isLoading: true });
     try {
-      if (vendorService.approveVendorRequest) {
-        await vendorService.approveVendorRequest(requestData);
-      } else {
-        // Fallback default service call
-        await vendorService.createVendor({
-          name: requestData.storeName,
-          email: "",
-          storeName: requestData.storeName,
-          phone: requestData.phone,
-          isActive: true
-        });
-      }
+      await vendorService.approveVendorRequest(requestData);
       await get().fetchVendors();
       await get().fetchPendingRequests();
       set({ isLoading: false });
@@ -333,9 +365,7 @@ export const useVendorStore = create<VendorState>((set, get) => ({
 
   rejectVendorRequest: async (requestId) => {
     try {
-      if (vendorService.rejectVendorRequest) {
-        await vendorService.rejectVendorRequest(requestId);
-      }
+      await vendorService.rejectVendorRequest(requestId);
       set((state) => ({
         pendingRequests: state.pendingRequests.filter((r) => r.id !== requestId)
       }));
@@ -346,13 +376,11 @@ export const useVendorStore = create<VendorState>((set, get) => ({
 
   updateOrderStatus: async (orderId, nextStatus) => {
     try {
-      if (vendorService.updateOrderStatus) {
-        await vendorService.updateOrderStatus(orderId, nextStatus);
-      }
-      
+      await vendorService.updateOrderStatus(orderId, nextStatus as ApiOrder['status']);
+
       set((state) => {
         const updatedOrders = state.orders.map((o) =>
-          o.id === orderId ? { ...o, status: nextStatus } : o
+          o.id === orderId ? { ...o, status: nextStatus as Order['status'] } : o
         );
 
         const updatedStats = state.stats ? {

@@ -51,6 +51,8 @@ export const navLinks = [
 
 // PRODUCT SIDEBAR VARIABLES
 
+
+
 export const PRICE_BRACKETS = [
   { label: "Under RF 1,000", min: 0, max: 1000 },
   { label: "RF 1,000 - RF 5,000", min: 1000, max: 5000 },
@@ -60,13 +62,32 @@ export const PRICE_BRACKETS = [
 
 export   const availableStores = ["TechHub Kigali","Kigali Central Store", "Matrix Hardware", "Prime Gear Rwanda"];
 
-export // Major Rwandan districts / cities reference list
-const RWANDA_LOCATIONS = [
-  "Kicukiro",
+export const RWANDA_LOCATIONS = [
+  // Kigali City Hubs
   "Nyarugenge",
+  "Nyabugogo",
+  "Gasabo",
+  "Kicukiro",
+  "Kimisagara",
+  "Remera",
+  "Gisozi",
+  "Kacyiru",
+  "Kanombe",
+  "Gikondo",
+  "Nyamirambo",
+  "Kimironko",
+  "Kigali",
+  
+  // Western Province & Key Border/Tourist Hubs
+  "Rubavu",
   "Musanze",
+  "Rusizi",
+  "Karongi",
+  
+  // Southern & Eastern Commercial Centers
   "Huye",
+  "Muhanga",
   "Rwamagana",
+  "Nyagatare",
   "Bugesera",
-  "Nyagatare"
 ];

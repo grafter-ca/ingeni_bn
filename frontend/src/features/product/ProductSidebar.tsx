@@ -1,24 +1,39 @@
+// components/product/ProductSidebar.tsx
 import { useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
 import { useProductStore } from "../../store/productStore";
-import { availableStores, PRICE_BRACKETS, RWANDA_LOCATIONS } from "../../constants";
+import { PRICE_BRACKETS, RWANDA_LOCATIONS } from "../../constants";
 import { ChevronDown } from "lucide-react";
 
 type Props = {
   priceRange: [number, number];
   onPriceChange: (range: [number, number]) => void;
+  selectedLocation: string | null;
+  onLocationChange: (location: string | null) => void;
+  selectedStore: string | null;
+  onStoreChange: (store: string | null) => void;
 };
 
-const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
-  const { categories, selectedCategory, setCategory, clearFilters } = useProductStore();
+const ProductSidebar = ({ 
+  priceRange, 
+  onPriceChange, 
+  selectedLocation, 
+  onLocationChange,
+  selectedStore,
+  onStoreChange 
+}: Props) => {
+  const { categories, selectedCategory, setCategory, clearFilters, products } = useProductStore();
   const [, setSearchParams] = useSearchParams();
 
-  // Local state for extended filters and pagination for categories
-  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
-  const [selectedStore, setSelectedStore] = useState<string | null>(null);
+  // Local state for categories pagination and verification ratings
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
   const [visibleCategoriesCount, setVisibleCategoriesCount] = useState<number>(5);
+
+  // Extract unique active vendors/stores dynamically from available products
+  const activeVendors = Array.from(
+    new Set(products.map((p) => p.vendor?.storeName).filter(Boolean))
+  ) as string[];
 
   const handleCategoryClick = useCallback(
     (categoryName: string | null, categoryId?: number | string) => {
@@ -35,8 +50,8 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
   const handleResetAll = () => {
     clearFilters();
     onPriceChange([0, 20000]);
-    setSelectedLocation(null);
-    setSelectedStore(null);
+    onLocationChange(null);
+    onStoreChange(null);
     setSelectedRating(null);
     setVisibleCategoriesCount(5);
     setSearchParams({});
@@ -53,13 +68,13 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
     <div className="flex flex-col gap-10 font-sans">
       
       {/* --- HEADER ACTIONS --- */}
-      <div className="flex items-center justify-between border-b border-white/5 pb-4">
-        <h3 className="text-[9px] uppercase tracking-[0.25em] text-gray-500 font-black font-mono">
+      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/5 pb-4">
+        <h3 className="text-[9px] uppercase tracking-[0.25em] text-zinc-500 dark:text-gray-500 font-black font-mono">
           System Filters
         </h3>
         <button
           onClick={handleResetAll}
-          className="text-[9px] uppercase tracking-widest text-blue-500 hover:text-blue-400 font-black font-mono transition-colors cursor-pointer"
+          className="text-[9px] uppercase tracking-widest text-blue-600 dark:text-blue-500 hover:text-blue-700 dark:hover:text-blue-400 font-black font-mono transition-colors cursor-pointer"
         >
           Reset All
         </button>
@@ -67,8 +82,8 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
 
       {/* --- CATEGORIES SECTION --- */}
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.15em] text-white mb-6 font-black flex items-center gap-2 font-mono">
-          <span className="w-1 h-3 bg-blue-500 rounded-full"></span>
+        <h3 className="text-[11px] uppercase tracking-[0.15em] text-zinc-900 dark:text-white mb-6 font-black flex items-center gap-2 font-mono">
+          <span className="w-1 h-3 bg-blue-600 dark:bg-blue-500 rounded-full"></span>
           Collections
         </h3>
         <ul className="flex flex-col gap-2">
@@ -77,13 +92,13 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
               onClick={() => handleCategoryClick(null)}
               className={`group flex items-center justify-between w-full text-xs py-2 transition-all cursor-pointer ${
                 selectedCategory === null
-                  ? "text-blue-400 font-bold"
-                  : "text-gray-500 hover:text-gray-300"
+                  ? "text-blue-600 dark:text-blue-400 font-bold"
+                  : "text-zinc-500 dark:text-gray-500 hover:text-zinc-900 dark:hover:text-gray-300"
               }`}
             >
               <span className="flex items-center gap-2">
                 {selectedCategory === null && (
-                  <motion.div layoutId="activeCatIndicator" className="w-1 h-1 bg-blue-500 rounded-full" />
+                  <motion.div layoutId="activeCatIndicator" className="w-1 h-1 bg-blue-600 dark:bg-blue-500 rounded-full" />
                 )}
                 All Inventories
               </span>
@@ -103,17 +118,17 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
                   onClick={() => handleCategoryClick(cat.name, cat.id)}
                   className={`group flex items-center justify-between w-full text-xs py-2 transition-all capitalize cursor-pointer ${
                     selectedCategory === cat.name
-                      ? "text-blue-400 font-bold"
-                      : "text-gray-500 hover:text-gray-300"
+                      ? "text-blue-600 dark:text-blue-400 font-bold"
+                      : "text-zinc-500 dark:text-gray-500 hover:text-zinc-900 dark:hover:text-gray-300"
                   }`}
                 >
                   <span className="flex items-center gap-2">
                     {selectedCategory === cat.name && (
-                      <motion.div layoutId="activeCatIndicator" className="w-1 h-1 bg-blue-500 rounded-full" />
+                      <motion.div layoutId="activeCatIndicator" className="w-1 h-1 bg-blue-600 dark:bg-blue-500 rounded-full" />
                     )}
                     {cat.name}
                   </span>
-                  <span className="text-[9px] text-gray-700 group-hover:text-gray-400 transition-colors font-mono">
+                  <span className="text-[9px] text-zinc-400 dark:text-gray-700 group-hover:text-zinc-600 dark:group-hover:text-gray-400 transition-colors font-mono">
                     //
                   </span>
                 </button>
@@ -125,7 +140,7 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
         {hasMoreCategories && (
           <button
             onClick={handleLoadMoreCategories}
-            className="mt-4 flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-blue-400 hover:text-blue-300 transition-colors cursor-pointer group"
+            className="mt-4 flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors cursor-pointer group"
           >
             <ChevronDown size={12} className="group-hover:translate-y-0.5 transition-transform" />
             Load More Categories ({categories.length - visibleCategoriesCount} remaining)
@@ -135,8 +150,8 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
 
       {/* --- PRICE BRACKET CHECKBOX SECTION --- */}
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.15em] text-white mb-6 font-black flex items-center gap-2 font-mono">
-          <span className="w-1 h-3 bg-blue-500 rounded-full"></span>
+        <h3 className="text-[11px] uppercase tracking-[0.15em] text-zinc-900 dark:text-white mb-6 font-black flex items-center gap-2 font-mono">
+          <span className="w-1 h-3 bg-blue-600 dark:bg-blue-500 rounded-full"></span>
           Price Threshold Tiers
         </h3>
         <div className="flex flex-col gap-2.5">
@@ -145,7 +160,7 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
             return (
               <label 
                 key={bracket.label} 
-                className="flex items-center gap-3 text-xs text-gray-400 hover:text-white cursor-pointer group"
+                className="flex items-center gap-3 text-xs text-zinc-600 dark:text-gray-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer group"
               >
                 <input
                   type="checkbox"
@@ -157,9 +172,9 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
                       onPriceChange([0, 20000]);
                     }
                   }}
-                  className="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer w-4 h-4"
+                  className="rounded bg-zinc-100 dark:bg-white/5 border-zinc-300 dark:border-white/10 text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer w-4 h-4"
                 />
-                <span className="font-mono text-[11px] group-hover:text-gray-200 transition-colors">
+                <span className="font-mono text-[11px] group-hover:text-zinc-900 dark:group-hover:text-gray-200 transition-colors">
                   {bracket.label}
                 </span>
               </label>
@@ -168,68 +183,82 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
         </div>
       </section>
 
-      {/* --- LOCATION FILTER (Districts / Cities in Rwanda) --- */}
+      {/* --- LOCATION FILTER (Chip / Button Grid Matrix) --- */}
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.15em] text-white mb-6 font-black flex items-center gap-2 font-mono">
-          <span className="w-1 h-3 bg-blue-500 rounded-full"></span>
+        <h3 className="text-[11px] uppercase tracking-[0.15em] text-zinc-900 dark:text-white mb-4 font-black flex items-center gap-2 font-mono">
+          <span className="w-1 h-3 bg-blue-600 dark:bg-blue-500 rounded-full"></span>
           Location / District
         </h3>
-        <div className="max-h-40 overflow-y-auto no-scrollbar flex flex-col gap-2 pr-1">
+        <div className="flex flex-wrap gap-1.5">
           <button
-            onClick={() => setSelectedLocation(null)}
-            className={`text-left text-xs py-1 transition-colors font-mono ${
-              selectedLocation === null ? "text-blue-400 font-bold" : "text-gray-500 hover:text-gray-300"
+            onClick={() => onLocationChange(null)}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider transition-all cursor-pointer ${
+              selectedLocation === null 
+                ? "bg-blue-600 text-white font-bold shadow-lg shadow-blue-600/25" 
+                : "bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-gray-400 hover:bg-zinc-200 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/5"
             }`}
           >
             All Regions
           </button>
-          {RWANDA_LOCATIONS.map((loc) => (
-            <button
-              key={loc}
-              onClick={() => setSelectedLocation(loc)}
-              className={`text-left text-xs py-1 transition-colors font-mono ${
-                selectedLocation === loc ? "text-blue-400 font-bold" : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              {loc} District
-            </button>
-          ))}
+          {RWANDA_LOCATIONS.map((loc) => {
+            const isSelected = selectedLocation === loc;
+            return (
+              <button
+                key={loc}
+                onClick={() => onLocationChange(loc)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider transition-all cursor-pointer ${
+                  isSelected 
+                    ? "bg-blue-600 text-white font-bold shadow-lg shadow-blue-600/25" 
+                    : "bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-gray-400 hover:bg-zinc-200 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/5"
+                }`}
+              >
+                {loc}
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      {/* --- STORE / VENDOR FILTER --- */}
+      {/* --- STORE / VENDOR FILTER (Chip / Button Grid Matrix) --- */}
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.15em] text-white mb-6 font-black flex items-center gap-2 font-mono">
-          <span className="w-1 h-3 bg-blue-500 rounded-full"></span>
+        <h3 className="text-[11px] uppercase tracking-[0.15em] text-zinc-900 dark:text-white mb-4 font-black flex items-center gap-2 font-mono">
+          <span className="w-1 h-3 bg-blue-600 dark:bg-blue-500 rounded-full"></span>
           Vendor Matrix
         </h3>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-1.5">
           <button
-            onClick={() => setSelectedStore(null)}
-            className={`text-left text-xs py-1 transition-colors font-mono ${
-              selectedStore === null ? "text-blue-400 font-bold" : "text-gray-500 hover:text-gray-300"
+            onClick={() => onStoreChange(null)}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider transition-all cursor-pointer ${
+              selectedStore === null 
+                ? "bg-blue-600 text-white font-bold shadow-lg shadow-blue-600/25" 
+                : "bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-gray-400 hover:bg-zinc-200 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/5"
             }`}
           >
             All Stores
           </button>
-          {availableStores.map((store) => (
-            <button
-              key={store}
-              onClick={() => setSelectedStore(store)}
-              className={`text-left text-xs py-1 transition-colors font-mono ${
-                selectedStore === store ? "text-blue-400 font-bold" : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              {store}
-            </button>
-          ))}
+          {activeVendors.map((store) => {
+            const isSelected = selectedStore === store;
+            return (
+              <button
+                key={store}
+                onClick={() => onStoreChange(store)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider transition-all cursor-pointer truncate max-w-full ${
+                  isSelected 
+                    ? "bg-blue-600 text-white font-bold shadow-lg shadow-blue-600/25" 
+                    : "bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-gray-400 hover:bg-zinc-200 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/5"
+                }`}
+              >
+                {store}
+              </button>
+            );
+          })}
         </div>
       </section>
 
       {/* --- USER RATING FILTER --- */}
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.15em] text-white mb-6 font-black flex items-center gap-2 font-mono">
-          <span className="w-1 h-3 bg-blue-500 rounded-full"></span>
+        <h3 className="text-[11px] uppercase tracking-[0.15em] text-zinc-900 dark:text-white mb-6 font-black flex items-center gap-2 font-mono">
+          <span className="w-1 h-3 bg-blue-600 dark:bg-blue-500 rounded-full"></span>
           User Verification
         </h3>
         <ul className="flex flex-col gap-2">
@@ -243,13 +272,13 @@ const ProductSidebar = ({ priceRange, onPriceChange }: Props) => {
               >
                 <div className="flex gap-0.5">
                   {[...Array(5)].map((_, i) => (
-                    <span key={i} className={`text-xs ${i < star ? "text-amber-500" : "text-white/5"}`}>
+                    <span key={i} className={`text-xs ${i < star ? "text-amber-500" : "text-zinc-300 dark:text-white/5"}`}>
                       ★
                     </span>
                   ))}
                 </div>
                 <span className={`text-[10px] uppercase font-bold font-mono transition-colors ${
-                  selectedRating === star ? "text-blue-400 font-extrabold" : "text-gray-500 group-hover:text-gray-300"
+                  selectedRating === star ? "text-blue-600 dark:text-blue-400 font-extrabold" : "text-zinc-500 dark:text-gray-500 group-hover:text-zinc-900 dark:group-hover:text-gray-300"
                 }`}>
                   & Up Matrix
                 </span>

@@ -26,12 +26,24 @@ export type ApiProduct = {
   vendor?: ApiVendor;
   categoryId: string;
   vendorId?: string;
+  rating?: number;
+  averageRating?: number;
+  reviewCount?: number;
+  reviews?: Array<{
+    id: string;
+    rating: number;
+    comment: string;
+    createdAt: string;
+  }>;
 };
-
 export type ApiCategory = {
   id: string;
   name: string;
   image: string;
+  imageUrl?: string;     
+  description?: string;
+  itemCount?: number;     
+  productsCount?: number; 
 };
 
 export type ApiVendor ={
@@ -39,12 +51,13 @@ export type ApiVendor ={
   storeName: string;
   email?: string;
   address?:string | null;
+  phone?: string | null;
+  image?: string | null;
+  isActive?: boolean;
 }
 
 export type UserRole = "user" | "admin" | "vendor"
 // src/types/api.ts
-
-
 // Auth types
 export type ApiUser = {
   id: number;

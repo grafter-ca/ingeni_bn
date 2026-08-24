@@ -1,3 +1,4 @@
+// src/features/auth/PaymentSecurityGateModal.tsx
 import { useEffect } from "react";
 import { useAuthState } from "../../context/AuthContext";
 import { Link } from "react-router-dom";
@@ -30,7 +31,7 @@ export function PaymentSecurityGateModal({
   if (!isOpen) return null;
 
   // Appends the current checkout path to the login/register links for automatic return loops
-  const getAuthRedirectPath = (targetPage : string) => {
+  const getAuthRedirectPath = (targetPage: string) => {
     const currentPath = encodeURIComponent(
       window.location.pathname + window.location.search,
     );
@@ -39,7 +40,7 @@ export function PaymentSecurityGateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md transition-opacity duration-300"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 dark:bg-slate-950/80 backdrop-blur-md transition-opacity duration-300"
       role="dialog"
       aria-modal="true"
       aria-labelledby="security-gate-title"
@@ -47,12 +48,12 @@ export function PaymentSecurityGateModal({
       {/* Click outside backdrop to close */}
       <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
 
-      <div className="w-full max-w-md p-6 sm:p-8 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-md p-6 sm:p-8 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-200 transition-colors">
         {/* Close Button */}
         <button
           onClick={onClose}
           aria-label="Close safety gate"
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-100 transition p-2 rounded-full hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="absolute top-4 right-4 text-gray-400 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 transition p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <svg
             className="w-5 h-5"
@@ -70,9 +71,9 @@ export function PaymentSecurityGateModal({
         </button>
 
         {/* Security Shield Visual Anchor */}
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 border border-blue-500/20 mb-4">
           <svg
-            className="h-6 w-6 text-blue-500"
+            className="h-6 w-6 text-blue-600 dark:text-blue-500"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -88,12 +89,12 @@ export function PaymentSecurityGateModal({
 
         <h3
           id="security-gate-title"
-          className="text-2xl font-bold text-white text-center mb-2 tracking-tight"
+          className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2 tracking-tight"
         >
           {user ? "Secure Checkout Authorization" : "Authentication Required"}
         </h3>
 
-        <p className="text-sm text-slate-400 text-center mb-6 leading-relaxed">
+        <p className="text-sm text-gray-500 dark:text-slate-400 text-center mb-6 leading-relaxed">
           {user
             ? `Verified account detected (${user.email}). Click below to finalize billing routes and transfer your funds to centralized escrow pools.`
             : "You must be logged in to securely lock inventory allocations, claim multi-vendor cart profiles, and authorize node payments safely."}
@@ -126,20 +127,20 @@ export function PaymentSecurityGateModal({
             <>
               <Link
                 to={getAuthRedirectPath("login")}
-                className="w-full py-4 bg-blue-600 ..."
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl tracking-wide transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center text-center"
               >
                 Sign In to Existing Account
               </Link>
               <div className="relative flex py-2 items-center">
-                <div className="grow border-t border-slate-800"></div>
-                <span className="shrink mx-4 text-slate-500 text-xs uppercase tracking-widest font-medium">
+                <div className="grow border-t border-gray-200 dark:border-slate-800"></div>
+                <span className="shrink mx-4 text-gray-400 dark:text-slate-500 text-xs uppercase tracking-widest font-medium">
                   or
                 </span>
-                <div className="grow border-t border-slate-800"></div>
+                <div className="grow border-t border-gray-200 dark:border-slate-800"></div>
               </div>
               <a
                 href={getAuthRedirectPath("register")}
-                className="w-full py-4 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-semibold rounded-xl tracking-wide transition-all flex items-center justify-center"
+                className="w-full py-4 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 hover:border-gray-300 dark:hover:border-slate-700 text-gray-900 dark:text-slate-200 font-semibold rounded-xl tracking-wide transition-all flex items-center justify-center text-center"
               >
                 Create a Security Account
               </a>
@@ -149,7 +150,7 @@ export function PaymentSecurityGateModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-3 text-sm text-slate-400 hover:text-slate-200 transition font-medium text-center block pt-2"
+            className="w-full py-3 text-sm text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition font-medium text-center block pt-2"
           >
             Cancel and Review Order
           </button>

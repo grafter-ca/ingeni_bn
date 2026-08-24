@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, NavLink } from "react-router-dom";
-import { X, Menu, LayoutGrid, Package, ShoppingCart, Users, User, LayersPlusIcon } from "lucide-react";
+import { X, Menu, LayoutGrid, Package, ShoppingCart, Users, User, LayersPlusIcon, Store } from "lucide-react";
 import Logout from "../ui/Logout";
 
 type NavProps = {
@@ -20,6 +20,7 @@ const adminLinks: NavLinkProps[] = [
   { link: "/admin/products", label: "Products", icon: <Package size={20} /> },
   { link: "/admin/orders", label: "Orders", icon: <ShoppingCart size={20} /> },
   { link: "/admin/vendors", label: "Vendors", icon: <User size={20} /> },
+  { link: "/admin/vendor-requests", label: "Manage Requests", icon: <Store size={20} /> }, 
   { link: "/admin/users", label: "Users", icon: <Users size={20} /> },
 ];
 

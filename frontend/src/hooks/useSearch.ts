@@ -3,8 +3,13 @@ import { useProductStore } from "../store/productStore";
 
 // Single Responsibility: manages global search state and debounce
 export const useSearch = () => {
-  const { searchQuery, setSearchQuery, clearFilters } = useProductStore();
+  const { searchQuery, setSearchQuery } = useProductStore();
   const [inputValue, setInputValue] = useState(searchQuery);
+
+  // Sync local input value if global searchQuery changes externally
+  useEffect(() => {
+    setInputValue(searchQuery);
+  }, [searchQuery]);
 
   // useEffect — debounce search by 400ms
   useEffect(() => {
@@ -20,8 +25,8 @@ export const useSearch = () => {
 
   const handleClear = useCallback(() => {
     setInputValue("");
-    clearFilters();
-  }, [clearFilters]);
+    setSearchQuery(""); // Only clear the search query, leaving other filters/products intact
+  }, [setSearchQuery]);
 
   return { inputValue, handleSearch, handleClear, searchQuery };
 };

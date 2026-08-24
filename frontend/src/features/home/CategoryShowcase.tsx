@@ -1,103 +1,68 @@
+// src/components/vendor/CategoryShowcase.tsx
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight } from "lucide-react";
+import { Layers } from "lucide-react";
 import { useProductStore } from "../../store/productStore";
+import CategorySkeleton from "../../components/common/CategorySkeleton";
+import CategoryCard from "../../features/admin/category/CategoryCard";
 
 const CategoryShowcase = () => {
-  const { categories, fetchCategories } = useProductStore();
+  const { categories, fetchCategories, isLoading } = useProductStore();
   const navigate = useNavigate();
 
-  useEffect(() => { 
-    fetchCategories(); 
+  useEffect(() => {
+    fetchCategories();
   }, [fetchCategories]);
 
   return (
-    <section className="px-6 py-28 border-b border-gray-800 bg-[#0a0a0a] relative overflow-hidden">
-      
-      {/* Subtle Background Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-600/5 rounded-full blur-[140px] pointer-events-none" />
+    <section className="px-6 py-6 border-b border-zinc-200 dark:border-white/5 bg-white dark:bg-[#050505] relative overflow-hidden transition-colors">
+      {/* Background Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-600/[0.03] rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto relative z-10">
-        
         {/* Section Header */}
         <motion.div
-          className="flex flex-col md:flex-row md:items-end justify-between mb-14 gap-6"
+          className="flex flex-col md:flex-row md:items-end mb-4 justify-between gap-6"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 mb-3 backdrop-blur-md">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-              <p className="font-poppins text-[10px] uppercase tracking-widest text-gray-300">
-                Curated Collections
-              </p>
-            </div>
-            <h2 className="font-poppins font-bold text-3xl md:text-5xl text-white tracking-wide">
-              Shop Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-200">World</span>
-            </h2>
+          <div className="inline-flex md:w-[200px] w-auto items-center justify-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-100 dark:bg-white/[0.05] border border-zinc-200 dark:border-white/10 mb-2 backdrop-blur-md shadow-inner">
+            <Layers size={14} className="text-blue-600 dark:text-blue-400" />
+            <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-600 dark:text-gray-300">
+              Shop by category
+            </p>
           </div>
-          <p className="font-poppins text-sm text-gray-400 max-w-sm">
-            Explore meticulously sorted categories designed for distinct lifestyles and tastes.
+          <p className="font-poppins text-xs md:text-sm text-zinc-500 dark:text-gray-400 max-w-sm leading-relaxed">
+            Discover locally sourced commodities, daily goods, and vendor
+            supplies organized for seamless browsing.
           </p>
         </motion.div>
 
-        {/* Categories Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {categories.length === 0 ? (
-            <div className="col-span-full text-center py-12 text-gray-500 font-poppins">
-              No category available yet!
+        {/* Categories Grid using CategoryCard */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          {isLoading ? (
+            Array.from({ length: 8 }).map((_, idx) => (
+              <CategorySkeleton key={idx} />
+            ))
+          ) : categories.length === 0 ? (
+            <div className="col-span-full text-center py-16 text-zinc-400 dark:text-gray-500 font-mono text-xs border border-zinc-200 dark:border-white/10 rounded-2xl bg-zinc-50 dark:bg-[#0a0a0a]">
+              No marketplace categories available yet!
             </div>
           ) : (
-            categories.slice(0, 8).map((cat, i) => {
-              // Create a dynamic modern bento span look for specific items
-              const isFeatured = i === 0 || i === 3;
-
-              return (
-                <motion.div
-                  key={cat.id}
-                  className={`relative group overflow-hidden cursor-pointer rounded-2xl border border-white/10 bg-gray-900 ${
-                    isFeatured ? "md:col-span-2 md:row-span-2 aspect-[16/10] md:aspect-auto" : "aspect-square"
-                  }`}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.05, duration: 0.5 }}
-                  whileHover={{ y: -6 }}
-                  onClick={() => navigate(`/products?categoryId=${cat.id}`)}
-                >
-                  {/* Category Image */}
-                  <img
-                    src={cat.image}
-                    alt={cat.name}
-                    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 filter brightness-90 group-hover:brightness-100"
-                  />
-
-                  {/* Modern Multi-Stop Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent transition-opacity duration-300 group-hover:opacity-90" />
-
-                  {/* Top Action Icon indicator */}
-                  <div className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/15 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 text-white">
-                    <ArrowUpRight size={18} />
-                  </div>
-
-                  {/* Category Details */}
-                  <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col justify-end transform transition-transform duration-300">
-                    <span className="font-mono text-[10px] text-blue-400 uppercase tracking-widest mb-1 opacity-80">
-                      Collection 0{i + 1}
-                    </span>
-                    <h3 className="font-poppins font-semibold text-lg md:text-xl text-white tracking-wide uppercase group-hover:text-blue-200 transition-colors">
-                      {cat.name}
-                    </h3>
-                  </div>
-
-                  {/* Border Glow on Hover */}
-                  <div className="absolute inset-0 border border-blue-500/0 group-hover:border-blue-500/40 rounded-2xl transition-colors duration-500 pointer-events-none" />
-                </motion.div>
-              );
-            })
+            categories.slice(0, 8).map((cat) => (
+              <CategoryCard
+                key={cat.id}
+                id={cat.id}
+                name={cat.name}
+                description={cat.description}
+                imageUrl={cat.image || cat.imageUrl}
+                itemCount={cat.productsCount}
+                onClick={() => navigate(`/products?categoryId=${cat.id}`)}
+              />
+            ))
           )}
         </div>
       </div>
