@@ -16,7 +16,6 @@ import { AllowAnonymous, Roles } from '@thallesp/nestjs-better-auth';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 
 @Controller('categories')
-@UseGuards(RolesGuard)
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
@@ -26,13 +25,16 @@ export class CategoryController {
     return this.categoryService.findAll();
   }
 
-  /**
-   * POST /categories
-   * Processes a single image binary stream from FormData to create a category
-   */
+  @Get(':id')
+  @AllowAnonymous()
+  async getOne(@Param('id') id: string) {
+    return this.categoryService.findOne(id);
+  }
+
   @Post()
+  @UseGuards(RolesGuard)
   @Roles(['admin'])
-  @UseInterceptors(FileInterceptor('image')) // Front-end must append file binary directly to the 'image' key
+  @UseInterceptors(FileInterceptor('image'))
   async create(
     @Body() data: any, 
     @UploadedFile() file: Express.Multer.File
@@ -40,11 +42,8 @@ export class CategoryController {
     return this.categoryService.create(data, file);
   }
 
-  /**
-   * PATCH /categories/:id
-   * Mutates textual fields or handles asset substitution seamlessly
-   */
   @Patch(':id')
+  @UseGuards(RolesGuard)
   @Roles(['admin'])
   @UseInterceptors(FileInterceptor('image'))
   async update(
@@ -57,6 +56,7 @@ export class CategoryController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
   @Roles(['admin'])
   async remove(@Param('id') id: string) {
     const cleanId = id.replace('local-', '').replace('fake-', '');

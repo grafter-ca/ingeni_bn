@@ -105,7 +105,7 @@ const Inventory = () => {
 
       {/* Modal - Rendered at root level for portal-like behavior */}
       {isModalOpen && (
-        <ProductFormModal onClose={() => setIsModalOpen(false)} />
+        <ProductFormModal onFormSuccess={() => setIsModalOpen(false)} />
       )}
     </section>
   );

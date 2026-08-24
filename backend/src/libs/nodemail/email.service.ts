@@ -19,7 +19,6 @@ export class EmailService {
       },
     });
   }
-
   /**
    * Core execution method to dispatch raw mail payloads
    */
@@ -38,7 +37,6 @@ export class EmailService {
       throw new InternalServerErrorException(`Email pipeline breakdown: ${error.message}`);
     }
   }
-
   // --- EMAIL TEMPLATE: PRODUCT CREATION CONFIRMATION ---
   async sendProductCreationAlert(vendorEmail: string, vendorName: string, productTitle: string) {
     const subject = `🚀 Product Published Successfully: ${productTitle}`;
@@ -55,7 +53,6 @@ export class EmailService {
     `;
     return this.sendMail(vendorEmail, subject, html);
   }
-
   // --- EMAIL TEMPLATE: PRODUCT MODIFICATION NOTIFICATION ---
   async sendProductUpdateAlert(vendorEmail: string, vendorName: string, productTitle: string) {
     const subject = `🔄 Listing Profile Modified: ${productTitle}`;
@@ -73,7 +70,6 @@ export class EmailService {
     `;
     return this.sendMail(vendorEmail, subject, html);
   }
-
   // --- EMAIL TEMPLATE: VENDOR SECURITY INCIDENT DESK ---
   async sendSecurityIssueRequest(vendorEmail: string, storeName: string, issueDetails: string) {
     // Dispatches a highly visible critical alert to your primary admin mailbox
@@ -107,4 +103,24 @@ export class EmailService {
     `;
     return this.sendMail(systemAdminEmail, subject, html);
   }
+  // Add this to your EmailService class
+async sendVendorOnboardingRequest(userName: string, userEmail: string, businessDescription: string) {
+  const adminEmail = process.env.SMTP_USER || 'callebhabyar55@gmail.com';
+  const subject = `🆕 New Vendor Onboarding Request: ${userName}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #d1d5db; border-radius: 8px;">
+      <h2 style="color: #059669;">New Vendor Application</h2>
+      <p>A user has requested to join as a vendor on the Ingeri Store platform.</p>
+      <div style="background: #f9fafb; padding: 15px; border-radius: 6px;">
+        <p><strong>Name:</strong> ${userName}</p>
+        <p><strong>Email:</strong> ${userEmail}</p>
+        <p><strong>Business Context:</strong><br>${businessDescription}</p>
+      </div>
+      <p style="margin-top: 20px;">
+        <a href="https://your-admin-dashboard-url.com" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Review in Admin Panel</a>
+      </p>
+    </div>
+  `;
+  return this.sendMail(adminEmail, subject, html);
+}
 }

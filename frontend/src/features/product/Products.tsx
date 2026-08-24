@@ -11,7 +11,7 @@ import SearchBar from "../../components/ui/SearchBar";
 type SortOption = "default" | "price_asc" | "price_desc" | "newest";
 
 const Products = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const categoryIdParam = searchParams.get("categoryId");
 
   const {
@@ -19,11 +19,12 @@ const Products = () => {
     isLoading,
     isFetchingMore,
     error,
-    fetchProducts,
+    fetchPublicProducts,
     fetchMoreProducts,
     fetchCategories,
     setCategory,
-    categories
+    categories,
+    selectedCategory
   } = useProductStore();
 
   const { handleClear } = useSearch();
@@ -34,18 +35,26 @@ const Products = () => {
   const [page, setPage] = useState(1);
   const PER_PAGE = 12;
 
+  // Fetch categories on mount
   useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
 
+  // Synchronize URL categoryIdParam with the store state
   useEffect(() => {
-    if (categoryIdParam) {
-      setCategory(String(categoryIdParam));
-    } else {
-      fetchProducts({ limit: 40 });
+    if (categoryIdParam && categories.length > 0) {
+      const matchedCat = categories.find(c => String(c.id) === String(categoryIdParam));
+      if (matchedCat) {
+        // Pass either the category ID or name depending on what your API returns
+        setCategory(matchedCat.id);
+      }
+    } else if (!categoryIdParam) {
+      setCategory(null);
+      setSearchParams({});
     }
+    fetchPublicProducts({ limit: 40 });
     setPage(1);
-  }, [categoryIdParam, setCategory, fetchProducts]);
+  }, [categoryIdParam, categories, setCategory, fetchPublicProducts]);
 
   const sorted = useMemo(() => {
     let result = [...filteredProducts].filter(
@@ -68,16 +77,26 @@ const Products = () => {
     }
   }, [hasMore, fetchMoreProducts]);
 
-  console.log("Products rendered with:", { categoryIdParam, sortBy, priceRange, page, filteredProductsLength: filteredProducts.length, sortedLength: sorted.length });  
+  // Find the matching human-readable category name from your categories array
+  const currentCategoryName = useMemo(() => {
+    if (!selectedCategory) return "Collections";
+
+    // Check if selectedCategory matches an ID or is already a name
+    const found = categories.find(
+      (c) => String(c.id) === String(selectedCategory) || c.name.toLowerCase() === String(selectedCategory).toLowerCase()
+    );
+
+    return found ? found.name : selectedCategory;
+  }, [selectedCategory, categories]);
 
   return (
     <div className="min-h-screen bg-[#050505] font-sans text-gray-100 relative selection:bg-blue-500/30">
-      
+
       {/* --- MOBILE SIDEBAR DRAWER --- */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -93,7 +112,7 @@ const Products = () => {
             >
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-sm font-black tracking-widest text-white uppercase font-mono">Filters</h2>
-                <button 
+                <button
                   onClick={() => setSidebarOpen(false)}
                   className="p-2 bg-white/5 text-gray-400 hover:text-white rounded-xl transition-colors cursor-pointer"
                 >
@@ -110,10 +129,8 @@ const Products = () => {
       <div className="border-b border-white/5 bg-[#050505]/80 backdrop-blur-md sticky top-0 z-30">
         <div className="px-6 py-5 flex flex-wrap items-center justify-between gap-4 max-w-7xl mx-auto">
           <div>
-            <h1 className="font-black text-xl md:text-2xl text-white tracking-tight uppercase font-mono bg-linear-to-r from-white to-gray-400 bg-clip-text ">
-              {categoryIdParam 
-                ? categories.find(c => String(c.id) === String(categoryIdParam))?.name || "Loading..." 
-                : "Collections"}
+            <h1 className="font-black text-xl md:text-2xl text-white tracking-tight uppercase font-mono bg-gradient-to-r from-white to-gray-400 bg-clip-text">
+              {currentCategoryName}
             </h1>
             <p className="text-gray-500 text-[10px] mt-1 font-bold tracking-[0.2em] uppercase font-mono">
               {sorted.length} Units Available
@@ -147,13 +164,13 @@ const Products = () => {
       </div>
 
       <div className="max-w-7xl mx-auto flex items-start">
-        {/* --- DESKTOP SIDEBAR (Side-Fixed Viewport Tracking) --- */}
+        {/* --- DESKTOP SIDEBAR --- */}
         <aside className="hidden md:block w-72 shrink-0 border-r border-white/5 px-6 py-12 sticky top-24 h-[calc(100vh-100px)] overflow-y-auto no-scrollbar">
           <ProductSidebar priceRange={priceRange} onPriceChange={setPriceRange} />
         </aside>
 
         {/* Product Grid Area Layout */}
-        <main className="flex-1 px-4 md:px-8 py-8 md:py-12">
+        <main className="flex-1 px-4 md:px-8 py-5 md:py-9">
           {error && (
             <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 mb-8 text-rose-400 text-xs font-mono flex items-center gap-3">
               <X size={14} /> telemetry error: {error}
@@ -161,7 +178,7 @@ const Products = () => {
           )}
 
           {isLoading && page === 1 ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="aspect-3/4 bg-white/2 border border-white/5 animate-pulse rounded-2xl" />
               ))}
@@ -169,8 +186,8 @@ const Products = () => {
           ) : (
             <>
               <AnimatePresence mode="popLayout">
-                <motion.div 
-                  className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8 md:gap-6"
+                <motion.div
+                  className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-4 md:gap-4"
                   layout
                 >
                   {paginated.map((product, i) => (
@@ -200,7 +217,7 @@ const Products = () => {
                     {isFetchingMore ? <Loader2 className="animate-spin" size={12} /> : "Load Engine Matrix"}
                   </motion.button>
                 )}
-                
+
                 <p className="text-gray-600 text-[9px] font-bold tracking-widest uppercase font-mono">
                   {paginated.length} / {sorted.length} Units Manifested
                 </p>

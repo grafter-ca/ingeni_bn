@@ -1,62 +1,50 @@
 import { useState } from "react";
 import ProductList from "./ProductList";
 import { ProductForm } from "../../../components/forms/ProductForm";
-import { Plus, SlidersHorizontal } from "lucide-react";
-import { useAuthState } from "../../../context/AuthContext"; // Ensure you have access to the current user/vendor
+import { Plus } from "lucide-react";
+import { useAuthState } from "../../../context/AuthContext";
+import { useProductStore } from "../../../store/productStore";
 
 export default function ProductManagement() {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const { user } = useAuthState();
+  const { setEditingProduct, isEditing } = useProductStore();
 
-  const handleEdit = (id: string) => {
-    setEditingId(id);
+  const handleEdit = (product: any) => {
+    setEditingProduct(product); // Populates formData in store
     setIsFormOpen(true);
   };
 
   const handleAddNew = () => {
-    setEditingId(null);
+    setEditingProduct(null); // Clears formData in store
     setIsFormOpen(true);
   };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Page Header */}
+      {/* Header and List */}
       <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tighter text-white uppercase">Product Catalog</h1>
-          <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] mt-1">
-            Manage your inventory assets & global listings
-          </p>
-        </div>
-        
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-all text-[10px] font-bold uppercase tracking-widest text-white">
-            <SlidersHorizontal size={14} /> Filter
-          </button>
-          <button 
-            onClick={handleAddNew}
-            className="flex items-center gap-2 px-6 py-2 bg-white text-black rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-gray-200 transition-all"
-          >
-            <Plus size={16} /> New Asset
-          </button>
-        </div>
+        <h1 className="text-3xl font-bold text-white uppercase tracking-tighter">Product Catalog</h1>
+        <button onClick={handleAddNew} className="bg-white text-black px-3 py-2 rounded-xl flex gap-2 font-bold uppercase text-[10px]">
+          <Plus size={16} /> New Asset
+        </button>
       </div>
 
-      {/* Main Content Area */}
       <ProductList onEdit={handleEdit} />
 
-      {/* Overlay Form Modal */}
+      {/* Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg animate-in zoom-in-95 duration-200">
-            <ProductForm 
-              // Passing both the edit ID (if exists) and the vendor context
-              productId={editingId || undefined } 
-              vendorId={ user?.id || "default-vendor-id"} 
-              onClose={() => setIsFormOpen(false)} 
-            />
-          </div>
+          <ProductForm
+            key={isEditing?.id ?? "new"}
+            productId={isEditing?.id || null}
+            vendorId={isEditing?.vendorId || user?.id || "default-vendor-id"}
+            vendorName={isEditing?.vendor?.storeName || "Active Merchant"}
+            onClose={() => {
+              setIsFormOpen(false);
+              setEditingProduct(null);
+            }}
+          />
         </div>
       )}
     </div>

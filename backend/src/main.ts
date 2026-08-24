@@ -7,9 +7,7 @@ import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    bodyParser: false,
-  });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // 1. Production Proxy Configuration
   if (process.env.NODE_ENV?.toLowerCase() === 'production') {
@@ -17,11 +15,30 @@ async function bootstrap() {
     console.log('✅ Trust proxy enabled for Production');
   }
 
-  app.use(helmet()); // Add security headers
-  // 2. Rate Limiting Middleware
-  const limiter = rateLimit({
+  app.enableCors({
+    origin: ['http://localhost:5173', process.env.FRONTEND_URL || 'http://localhost:3000','http://localhost:3000'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'Accept', 
+      'X-Requested-With', 
+      'Cookie', 
+      'Set-Cookie',
+      'x-better-auth-csrf', // If using Better-Auth
+    ],
+  });
+
+   app.use(helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
+
+   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    max: 1000, // Limit each IP to 1000 requests per windowMs
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     message: {
@@ -30,24 +47,16 @@ async function bootstrap() {
     },
   });
 
-  app.use(limiter); // Apply to all routes
+  app.use(limiter); 
 
-  // 3. CORS
-  app.enableCors({
-    origin: ['http://localhost:5173', process.env.FRONTEND_URL || 'http://localhost:3000'],
-    credentials: true,
-  });
+  app.setGlobalPrefix('api');
 
-  // 4. Pipes and Body Parsers
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       transform: true,
     }),
   );
-
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
 
   const PORT = process.env.PORT || 8000;
   await app.listen(PORT, '0.0.0.0', () =>

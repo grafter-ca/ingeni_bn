@@ -4,23 +4,32 @@ import {
   admin,
   organization,
   multiSession,
-  // captcha,
   haveIBeenPwned,
   lastLoginMethod,
 } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import { PrismaClient } from "../generated/prisma/client.js";
 
 export const getAuthConfiguration = (prisma: PrismaClient) => {
-  const resend = new Resend(process.env.RESEND_API_KEY);
+ const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT || 465),
+    secure: process.env.SMTP_SECURE === "true", 
+    auth: {
+      user: process.env.SMTP_USER || "callebhabyar55@gmail.com",
+      pass: process.env.SMTP_PASS || "fevw ozes scqg vxpn",
+    },
+    tls: {
+      rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED === "true",
+    },
+  });
 
   return betterAuth({
     database: prismaAdapter(prisma, {
       provider: "postgresql",
     }),
 
-    // URL & Security
     baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8000",
 
     trustedOrigins: [
@@ -29,7 +38,6 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       process.env.FRONTEND_URL || "",
     ],
 
-    // ✅ ONLY custom fields you actually need
     user: {
       additionalFields: {
         phone: { type: "string", required: false },
@@ -37,12 +45,10 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       },
     },
 
-    // ✅ DATABASE HOOKS (clean + correct shape)
     databaseHooks: {
       user: {
         create: {
           before: async (ctx) => {
-            // Do NOT inject role here — let Prisma default handle it
             return {
               data: {
                 ...ctx,
@@ -51,10 +57,11 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
           },
 
           after: async (user) => {
-            // Create vendor profile ONLY if role is 'vendor'
             if (user.role === "vendor") {
-              await prisma.vendor.create({
-                data: {
+              await prisma.vendor.upsert({
+                where: { userId: user.id },
+                update: {},
+                create: {
                   userId: user.id,
                   storeName: `${user.name}'s Store`,
                 },
@@ -76,8 +83,8 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
     },
 
     session: {
-      expiresIn: 60 * 60 * 24 * 7, // 7 days
-      updateAge: 60 * 60 * 24, // refresh daily
+      expiresIn: 60 * 60 * 24 * 7, 
+      updateAge: 60 * 60 * 24, 
       cookieCache: {
         enabled: true,
         maxAge: 5 * 60,
@@ -87,39 +94,36 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
-      callbackURL:
-        process.env.FRONTEND_URL + "/verify-email" ||
-        "http://localhost:3000/verify-email",
+      callbackURL: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/verify-email` : "http://localhost:3000/verify-email",
 
       sendVerificationEmail: async ({ user, url }) => {
-        console.log("Redirection url / verification url", url)
         try {
-          const fromEmail =
-            process.env.RESEND_FROM_EMAIL ||
-            "onboarding@resend.dev";
+          const parsedUrl = new URL(url);
+          const token = parsedUrl.searchParams.get("token");
+          const verifyLink = `${process.env.FRONTEND_URL || "http://localhost:3000"}/verify-email?token=${token}`;
 
-          await resend.emails.send({
-            from: `Ingeri Store <${fromEmail}>`,
-            to: [user.email],
+          const mailOptions = {
+            from: `"Ingeri Store Support" <${process.env.SMTP_USER || "callebhabyar55@gmail.com"}>`,
+            to: user.email,
             subject: "Verify your Ingeri account",
             html: `
               <div style="font-family: sans-serif; max-width: 600px; padding: 20px;">
                 <h2>Welcome to Ingeri, ${user.name}!</h2>
                 <p>Click the button below to verify your email and activate your account.</p>
-                <a href="${process.env.FRONTEND_URL}/verify-email?token=${new URL(url).searchParams.get("token")}"
-                style="background: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-                Verify Email
+                <a href="${verifyLink}" style="background: #4f46e5; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                  Verify Email
                 </a>
-                <div style="margin-top: 20px font-weight:100">
-                  <p>If you didn't made any registration yet. Ignore this email</p>
+                <div style="margin-top: 20px; font-weight: 100; color: #666;">
+                  <p>If you didn't make this registration, please ignore this email.</p>
                 </div>
               </div>
             `,
-          });
+          };
 
-          console.log(`✅ Verification email sent to ${user.email}`);
+          await transporter.sendMail(mailOptions);
         } catch (err) {
-          console.error("❌ Failed to send verification email:", err);
+          console.error("❌ Failed to send verification email via Nodemailer:", err);
+          throw new Error("Failed to send verification email.", { cause: err });
         }
       },
     },
@@ -130,13 +134,6 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
         allowUserToCreateOrganization: true,
       }),
       multiSession(),
-      // ...(process.env.NODE_ENV !== 'production' ? [] : [
-      //   captcha({
-      //   provider: "hcaptcha",
-      //   secretKey: process.env.HCAPTCHA_SECRET_KEY!,
-      //   endpoints: ["/sign-in/email"],
-      // }),]),
-      
       haveIBeenPwned(),
       lastLoginMethod(),
     ],

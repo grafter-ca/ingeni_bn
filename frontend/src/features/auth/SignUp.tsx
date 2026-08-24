@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import RegisterForm from "../../components/forms/RegisterForm";
 import { useAuthState, useAuthActions } from "../../context/AuthContext";
 import type { RegisterPayloadProps } from "../../types/api";
+import toast from "react-hot-toast";
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -28,9 +29,7 @@ const Register: React.FC = () => {
    */
   useEffect(() => {
     if (user && !isLoading) {
-      const userRole = user.role?.toLowerCase();
-      console.log("Registration successful. Role detected:", userRole);
-      
+      const userRole = user.role?.toLowerCase();      
       switch (userRole) {
         case "admin":
           navigate("/admin", { replace: true });
@@ -91,9 +90,15 @@ const Register: React.FC = () => {
       try {
         // After this call, 'user' state in context will update,
         // triggering the useEffect above.
-        await register(formData);
+      await register(formData);
+      setLocalError(null)
+
+      toast.success("Registration successful! Please check your email for verification.");
+
+      navigate("/login", { replace: true });
       } catch (err) {
         console.error("Registration flow failed:", err);
+  setLocalError((err as string) || "Failed to create account. Please try again.");
       }
     },
     [formData, confirmPassword, register]

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { productService } from "../services/productService";
-import type { ApiCategory, ApiProduct } from "../types/api";
+import type { ApiCategory, ApiProduct, ProductFormData } from "../types/api";
 
 export interface ApiVendor {
   id: string;
@@ -19,18 +19,22 @@ interface ProductState {
   isLoading: boolean;
   isFetchingMore: boolean;
   error: string | null;
+  // ADD THESE:
+  offset: number;
+  limit: number;
+  hasMore: boolean;
   selectedVendorId: string | null;
   searchQuery: string;
   selectedCategory: string | null;
   isEditing: ApiProduct | null;
+  _sanitizeImages: (images: any[] | undefined) => string[];
 
   // Forms
-  formData: Omit<ApiProduct, "id" | "category" | "origin" | "images"> & {
-    images: string[];
-  };
+  formData: ProductFormData
 
   // Actions
   fetchProducts: (params?: any) => Promise<void>;
+  fetchPublicProducts: (params?: any) => Promise<void>;
   fetchMoreProducts: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchVendors: () => Promise<void>;
@@ -41,8 +45,8 @@ interface ProductState {
   applyFilters: () => void;
   updateFormData: (data: Partial<ProductState["formData"]>) => void;
   setEditingProduct: (product: ApiProduct | null) => void;
-  addProduct: (vendorId: string) => Promise<void>;
-  updateProduct: (id: string) => Promise<void>;
+  addProduct: (vendorId: string, payload: FormData) => Promise<void>;
+  updateProduct: (id: string, payload: FormData) => Promise<void>;
   removeProduct: (id: string) => Promise<void>;
   clearFormData: () => void;
   clearFilters: () => void;
@@ -52,6 +56,9 @@ interface ProductState {
 export const useProductStore = create<ProductState>((set, get) => ({
   products: [],
   filteredProducts: [],
+  offset: 0,
+  limit: 20,
+  hasMore: true,
   categories: [],
   vendors: [],
   isLoading: false,
@@ -69,30 +76,61 @@ export const useProductStore = create<ProductState>((set, get) => ({
     images: [],
     categoryId: "",
     vendorId: "",
+    location: "",
+    imageFiles: [],
+  },
+
+  _sanitizeImages: (images: any[] | undefined): string[] => {
+    if (!Array.isArray(images)) return [];
+    return images.map((img) => (typeof img === "string" ? img : img?.url || ""));
   },
 
   fetchProducts: async (params = {}) => {
     set({ isLoading: true, error: null });
     try {
-      const activeVendorId = get().selectedVendorId;
-      const combinedParams = activeVendorId
-        ? { ...params, vendorId: activeVendorId }
-        : params;
+      const { selectedVendorId } = get();
+      const combinedParams = selectedVendorId ? {
+        ...params,
+        vendorId: selectedVendorId
+      } : params;
+
       const data = await productService.getProducts(combinedParams);
 
-      const sanitizedData = data.map((p: any) => ({
+      const sanitizedData = data.map((p) => ({
         ...p,
-        images: Array.isArray(p.images)
-          ? p.images.map((img: any) =>
-              typeof img === "string" ? img : img.url,
-            )
-          : [],
+        images: get()._sanitizeImages(p.images),
       }));
 
       set({ products: sanitizedData, isLoading: false });
       get().applyFilters();
-    } catch (err) {
-      set({ error: "Failed to fetch inventory", isLoading: false });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to fetch inventory";
+      set({ error: message, isLoading: false });
+      console.error("[ProductStore]: Fetch Error", err); // Log for observability
+    }
+  },
+  fetchPublicProducts: async (params = {}) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { selectedVendorId } = get();
+      const combinedParams = selectedVendorId ? { ...params, vendorId: selectedVendorId } : params;
+
+      const data = await productService.getProductsPublic(combinedParams);
+
+      const sanitizedData = data.map((p) => ({
+        ...p,
+        images: get()._sanitizeImages(p.images),
+      }));
+
+      set({
+        products: sanitizedData,
+        isLoading: false,
+      });
+      get().applyFilters();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to fetch public inventory";
+      set({ error: message, isLoading: false });
+      console.error("[ProductStore]: Public Fetch Error", err);
     }
   },
 
@@ -104,8 +142,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
         ...p,
         images: Array.isArray(p.images)
           ? p.images.map((img: any) =>
-              typeof img === "string" ? img : img.url,
-            )
+            typeof img === "string" ? img : img.url,
+          )
           : [],
       }));
       set({ products: sanitizedData, isLoading: false });
@@ -116,7 +154,40 @@ export const useProductStore = create<ProductState>((set, get) => ({
   },
 
   fetchMoreProducts: async () => {
-    // Implement pagination logic here
+    const { isLoading, hasMore, offset, limit, selectedVendorId } = get();
+
+    if (isLoading || !hasMore) return;
+
+    set({ isLoading: true });
+
+    try {
+      const nextOffset = offset + limit;
+      const params = {
+        limit,
+        offset: nextOffset,
+        vendorId: selectedVendorId || undefined
+      };
+
+      const newData = await productService.getProducts(params);
+
+      const sanitizedData = newData.map((p) => ({
+        ...p,
+        images: get()._sanitizeImages(p.images),
+      }));
+
+      set((state) => ({
+        products: [...state.products, ...sanitizedData],
+        offset: nextOffset,
+        hasMore: newData.length === limit, // Logic: stop if we get fewer than limit
+        isLoading: false,
+      }));
+
+      get().applyFilters();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load more products";
+      set({ error: message, isLoading: false });
+      console.error("[ProductStore]: Pagination Error", err);
+    }
   },
 
   fetchCategories: async () => {
@@ -143,8 +214,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
     set({ searchQuery: query });
     get().applyFilters();
   },
-  setCategory: (cat) => {
-    set({ selectedCategory: cat });
+  setCategory: (catNameOrId: string | null) => {
+    set({ selectedCategory: catNameOrId });
     get().applyFilters();
   },
 
@@ -158,27 +229,45 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }
   },
 
- applyFilters: () => {
-  const { products, searchQuery, selectedCategory, selectedVendorId } = get();
-  
-  const filtered = products.filter((p) => {
-    // 1. Vendor Filter
-    const matchesVendor = !selectedVendorId || String(p.vendorId) === String(selectedVendorId);
-    
-    // 2. Category Filter
-    const matchesCategory = !selectedCategory || String(p.categoryId) === String(selectedCategory);
-    
-    // 3. Search Filter
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch = !q || 
-      p.title.toLowerCase().includes(q) || 
-      p.description.toLowerCase().includes(q);
+  applyFilters: () => {
+    const { products, searchQuery, selectedCategory, selectedVendorId } = get();
 
-    return matchesVendor && matchesCategory && matchesSearch;
-  });
+    // Find the category object if an ID or Name was passed
+    const categories = get().categories;
+    const matchedCategory = categories.find(
+      (c) => String(c.id) === String(selectedCategory) || c.name === selectedCategory
+    );
+    const targetCatId = matchedCategory ? String(matchedCategory.id) : null;
+    const targetCatName = matchedCategory ? matchedCategory.name.toLowerCase() : String(selectedCategory || "").toLowerCase();
 
-  set({ filteredProducts: filtered });
-},
+    const filtered = products.filter((p: any) => {
+      // 1. Vendor Filter
+      const matchesVendor = !selectedVendorId || String(p.vendorId) === String(selectedVendorId);
+
+      // 2. Flexible Category Filter (Handles ID, nested category objects, or category names)
+      let matchesCategory = true;
+      if (selectedCategory) {
+        const pCatId = p.categoryId || p.category?.id;
+        const pCatName = p.categoryName || p.category?.name || "";
+
+        const matchById = targetCatId && pCatId ? String(pCatId) === targetCatId : false;
+        const matchByName = targetCatName ? String(pCatName).toLowerCase() === targetCatName : false;
+        const matchDirect = String(pCatId) === String(selectedCategory);
+
+        matchesCategory = Boolean(matchById || matchByName || matchDirect);
+      }
+
+      // 3. Search Filter
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q ||
+        p.title.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q);
+
+      return matchesVendor && matchesCategory && matchesSearch;
+    });
+
+    set({ filteredProducts: filtered });
+  },
 
   updateFormData: (data) =>
     set((s) => ({ formData: { ...s.formData, ...data } })),
@@ -194,9 +283,12 @@ export const useProductStore = create<ProductState>((set, get) => ({
           description: product.description,
           images: Array.isArray(product.images)
             ? product.images.map((img: any) =>
-                typeof img === "string" ? img : img.url,
-              )
+              typeof img === "string" ? img : img.url,
+            )
             : [],
+
+          imageFiles: [],
+          location: product.location || "",
           categoryId: product.categoryId,
           vendorId: product.vendorId || "",
         },
@@ -207,38 +299,33 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }
   },
 
-  addProduct: async (vendorId?: string) => {
-    const { formData, selectedVendorId, fetchProducts, fetchVendorProducts } =
-      get();
+  addProduct: async (vendorId?: string, payload?: FormData) => {
+    const { fetchProducts, fetchVendorProducts, selectedVendorId } = get();
 
-    // 1. Determine the source of truth for the vendorId
+    // Validate that we have a vendor context
     const targetVendorId = vendorId || selectedVendorId;
-
     if (!targetVendorId) {
-      set({ error: "Cannot add product: No vendor selected." });
+      set({ error: "Missing vendor context." });
+      return;
+    }
+
+    if (!payload) {
+      set({ error: "No data to save." });
       return;
     }
 
     set({ isLoading: true, error: null });
 
     try {
-      const payload = {
-        ...formData,
-        vendorId: targetVendorId,
-        price: Number(formData.price) || 0,
-        stock: Number(formData.stock) || 0,
-      };
-
       await productService.createProduct(payload);
 
-      // 2. Refresh the list based on the active view
-      if (selectedVendorId) {
-        await fetchVendorProducts(selectedVendorId);
+      // Refresh list using the verified targetVendorId
+      if (targetVendorId) {
+        await fetchVendorProducts(targetVendorId);
       } else {
         await fetchProducts();
       }
 
-      // 3. Clear form on success
       get().clearFormData();
     } catch (err) {
       set({ error: "Failed to save product. Please try again." });
@@ -247,36 +334,31 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }
   },
 
-  updateProduct: async (id: string) => {
-    const { formData, fetchProducts, fetchVendorProducts, selectedVendorId } =
-      get();
+  updateProduct: async (id: string, payload?: FormData) => {
+    const { fetchProducts, fetchVendorProducts, selectedVendorId } = get();
+
+    if (!payload) {
+      set({ error: "No data to update." });
+      return;
+    }
 
     set({ isLoading: true, error: null });
 
     try {
-      // 1. Prepare and sanitize payload
-      const payload = {
-        ...formData,
-        price: Number(formData.price) || 0,
-        stock: Number(formData.stock) || 0,
-      };
-
-      // 2. Execute service mutation
+      // Use the FormData payload directly
       await productService.updateProduct(id, payload);
 
-      // 3. Re-sync state based on current context
+      // Re-sync
       if (selectedVendorId) {
         await fetchVendorProducts(selectedVendorId);
       } else {
         await fetchProducts();
       }
 
-      // 4. Cleanup UI state
       get().clearFormData();
     } catch (err) {
       set({
-        error:
-          "Failed to update product. Please check your network and try again.",
+        error: "Failed to update product. Please check your network and try again.",
       });
     } finally {
       set({ isLoading: false, isEditing: null });
@@ -301,6 +383,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
         price: 0,
         description: "",
         images: [],
+        imageFiles: [],
+        location: "",
         categoryId: "",
         vendorId: get().selectedVendorId || "",
       },

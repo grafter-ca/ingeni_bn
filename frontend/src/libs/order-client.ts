@@ -45,9 +45,7 @@ export const OrderClient = {
   // --- ADMIN ORDERS ---
   async getAllOrders(status?: string): Promise<Order[]> {
     try {
-      return await localApi.get<Order[]>("/orders/admin/all", {
-        params: status ? { status } : {},
-      });
+      return await localApi.get<Order[]>("/orders/admin/all", status ? { status } : {});
     } catch (error: any) {
       console.error(error);
       throw new Error(error?.response?.data?.message || "Failed to fetch all orders.");

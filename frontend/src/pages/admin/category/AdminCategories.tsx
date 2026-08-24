@@ -41,44 +41,57 @@ export default function AdminCategories() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto min-h-screen bg-gray-50/50">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Categories</h1>
-        <p className="text-gray-500">Global state-managed category system.</p>
-      </div>
+    <div className="min-h-screen bg-[#050505] text-white py-10 px-4">
+      <div className="max-w-5xl mx-auto space-y-8">
+        
+        {/* HEADER */}
+        <div>
+          <h1 className="text-3xl font-black uppercase tracking-wide">Categories</h1>
+          <p className="text-sm text-gray-400 mt-1">
+            Global state-managed category system.
+          </p>
+        </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-10">
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          {isEditing ? (
-            <Edit3 size={20} className="text-blue-600" />
-          ) : (
-            <Plus size={20} className="text-green-600" />
-          )}
-          {isEditing ? "Edit Existing Category" : "Create New Category"}
-        </h2>
-        <CategoryForm
-          formData={formData}
-          setFormData={setFormData}
-          isEditing={isEditing}
-          setIsEditing={setIsEditing}
-          handleSubmit={handleSubmit}
-        />
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        {loading ? (
-          <div className="p-20 flex flex-col items-center justify-center text-gray-400">
-            <Loader2 className="animate-spin mb-2" size={40} />
-            <p>Syncing with server...</p>
-          </div>
-        ) : (
-          <CategoryTable
-            categories={categories}
-            handleDelete={handleDelete}
-            setIsEditing={setIsEditing}
+        {/* FORM CONTAINER */}
+        <div className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-8 shadow-xl">
+          <h2 className="text-lg font-bold mb-6 flex items-center gap-3 text-white">
+            {isEditing ? (
+              <div className="p-2 rounded-xl bg-blue-600/10 text-blue-400">
+                <Edit3 size={20} />
+              </div>
+            ) : (
+              <div className="p-2 rounded-xl bg-green-600/10 text-green-400">
+                <Plus size={20} />
+              </div>
+            )}
+            {isEditing ? "Edit Existing Category" : "Create New Category"}
+          </h2>
+          <CategoryForm
+            formData={formData}
             setFormData={setFormData}
+            isEditing={isEditing}
+            setIsEditing={setIsEditing}
+            handleSubmit={handleSubmit}
           />
-        )}
+        </div>
+
+        {/* TABLE CONTAINER */}
+        <div className="bg-[#0a0a0a] border border-white/5 rounded-3xl overflow-hidden shadow-xl">
+          {loading ? (
+            <div className="p-20 flex flex-col items-center justify-center text-gray-500">
+              <Loader2 className="animate-spin mb-3 text-blue-500" size={40} />
+              <p className="text-sm uppercase tracking-wider">Syncing with server...</p>
+            </div>
+          ) : (
+            <CategoryTable
+              categories={categories}
+              handleDelete={handleDelete}
+              setIsEditing={setIsEditing}
+              setFormData={setFormData}
+            />
+          )}
+        </div>
+
       </div>
     </div>
   );

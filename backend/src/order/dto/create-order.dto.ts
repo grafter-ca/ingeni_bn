@@ -1,3 +1,4 @@
+// backend/src/order/dto/create-order.dto.ts
 import {
   IsArray,
   IsEnum,
@@ -7,8 +8,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-import { Type } from 'class-transformer';
-
+import { Type, Transform } from 'class-transformer';
 import { PaymentMethod } from '../../../generated/prisma/client.js';
 
 class OrderItemDto {
@@ -19,6 +19,7 @@ class OrderItemDto {
   vendorId!: string;
 
   @IsNumber()
+  @Transform(({ value }) => (value ? Number(value) : value)) // Transforms string form fields into numbers
   quantity!: number;
 }
 
@@ -41,6 +42,17 @@ export class CreateOrderDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
+  @Transform(({ value }) => {
+    // If sent as a JSON string from FormData, parse it into an array
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   items!: OrderItemDto[];
 
   @IsString()
@@ -49,23 +61,30 @@ export class CreateOrderDto {
   @IsString()
   phoneNumber!: string;
 
+  @IsOptional()
+  @IsString()
+  paymentProofUrl?: string;
+
   @IsEnum(PaymentMethod)
   paymentMethod!: PaymentMethod;
 
   // -----------------------------------
-  // OPTIONAL TOTALS
+  // OPTIONAL TOTALS (With string-to-number transformers)
   // -----------------------------------
 
   @IsOptional()
   @IsNumber()
+  @Transform(({ value }) => (value ? Number(value) : value))
   totalAmount?: number;
 
   @IsOptional()
   @IsNumber()
+  @Transform(({ value }) => (value ? Number(value) : value))
   taxAmount?: number;
 
   @IsOptional()
   @IsNumber()
+  @Transform(({ value }) => (value ? Number(value) : value))
   shippingFees?: number;
 
   // -----------------------------------
@@ -75,9 +94,23 @@ export class CreateOrderDto {
   @IsOptional()
   @ValidateNested()
   @Type(() => GuestUserDto)
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   user?: GuestUserDto;
 
   @IsOptional()
   @IsString()
   userId?: string;
+
+  // Optional property for the raw multer file stream
+  @IsOptional()
+  paymentProofFile?: any;
 }

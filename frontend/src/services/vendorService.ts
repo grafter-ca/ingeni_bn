@@ -1,38 +1,6 @@
-import axios from "axios";
-
-// Define the core structures for data type safety
-export interface ApiVendor {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  logoUrl?: string;
-  storeName: string;
-  isActive: boolean;
-  createdAt: string;
-  _count?: {
-    products: number;
-    orders: number;
-  };
-}
-
-export interface VendorMetrics {
-  totalSales: number;
-  totalProducts: number;
-  activeOrders: number;
-}
-
-// Added structural interfaces matching our order management pipeline
-export interface ApiOrder {
-  id: string;
-  orderNumber: string;
-  totalAmount: number;
-  status: 'PENDING' | 'DELIVERED' | 'SHIPPED' | 'CANCELLED';
-  user?: {
-    name: string;
-  };
-  createdAt: string;
-}
+// src/services/vendorService.ts
+import { apiClient } from "../libs/vendor.client"; 
+import type { ApiOrder, VendorMetrics, ApiVendor } from "../types";
 
 interface VendorStats {
   revenue: number;
@@ -40,77 +8,88 @@ interface VendorStats {
   productCount: number;
 }
 
-const API_BASE_URL = import.meta.env.BETTER_AUTH_URL || "http://localhost:8000/api";
+export interface OnboardingRequest {
+  id: string;
+  userId: string;
+  storeName?: string;
+  businessDescription?: string;
+  description?: string;
+  address?: string;
+  phone?: string;
+  user?: {
+    name?: string;
+    email: string;
+  };
+  submittedAt?: string;
+}
 
 export const vendorService = {
-  /**
-   * Fetch all vendors with optional query filters (e.g., status, search)
-   */
   getVendors: async (params?: Record<string, any>): Promise<ApiVendor[]> => {
-    const response = await axios.get(`${API_BASE_URL}/vendors`, { params });
+    const response = await apiClient.get(`/vendors`, { params });
     return response.data;
   },
 
-  /**
-   * Fetch a single vendor details by their unique ID
-   */
   getVendorById: async (id: string): Promise<ApiVendor> => {
-    const response = await axios.get(`${API_BASE_URL}/vendors/${id}`);
+    const response = await apiClient.get(`/vendors/${id}`);
     return response.data;
   },
 
-  /**
-   * Fetch performance insights / summary dashboards for a single vendor profile
-   */
   getVendorMetrics: async (id: string): Promise<VendorMetrics> => {
-    const response = await axios.get(`${API_BASE_URL}/vendors/${id}/metrics`);
+    const response = await apiClient.get(`/vendors/${id}/metrics`);
     return response.data;
   },
 
-  /**
-   * Fetch real-time streaming order transactions assigned to the current vendor session
-   */
   getVendorOrders: async (): Promise<ApiOrder[]> => {
-    const response = await axios.get(`${API_BASE_URL}/vendor/orders`);
+    const response = await apiClient.get(`/vendor/orders`);
     return response.data;
   },
 
-  /**
-   * Fetch global operational ledger summaries (Revenue, Pending count, Inventory total)
-   */
   getStorefrontMetrics: async (): Promise<VendorStats> => {
-    const response = await axios.get(`${API_BASE_URL}/vendor/metrics`);
+    const response = await apiClient.get(`/vendor/metrics`);
     return response.data;
   },
 
-  /**
-   * Reconcile status state transitions on an active transaction tracking lifecycle
-   */
   updateOrderStatus: async (orderId: string, status: ApiOrder['status']): Promise<ApiOrder> => {
-    const response = await axios.patch(`${API_BASE_URL}/vendor/orders/${orderId}/status`, { status });
+    const response = await apiClient.patch(`/vendor/orders/${orderId}/status`, { status });
     return response.data;
   },
 
-  /**
-   * Create a new onboarding marketplace vendor profile
-   */
   createVendor: async (payload: Partial<ApiVendor>): Promise<ApiVendor> => {
-    const response = await axios.post(`${API_BASE_URL}/vendors`, payload);
+    const response = await apiClient.post(`/vendors`, payload);
     return response.data;
   },
 
-  /**
-   * Modify properties of an existing vendor profile
-   */
   updateVendor: async (id: string, payload: Partial<ApiVendor>): Promise<ApiVendor> => {
-    const response = await axios.put(`${API_BASE_URL}/vendors/${id}`, payload);
+    const response = await apiClient.put(`/vendors/${id}`, payload);
     return response.data;
   },
 
-  /**
-   * Permanently delete/offboard a vendor profile
-   */
+  requestOnboarding: async (description: string) => {
+    const response = await apiClient.post(`/vendors/request-onboarding`, { businessDescription: description });
+    return response.data;
+  },
+
   deleteVendor: async (id: string): Promise<void> => {
-    await axios.delete(`${API_BASE_URL}/vendors/${id}`);
+    await apiClient.delete(`/vendors/${id}`);
+  },
+  
+  toggleVendorStatus: async (id: string, currentStatus: boolean): Promise<ApiVendor> => {
+    const response = await apiClient.patch(`/vendors/${id}/toggle-status`, { currentStatus });
+    return response.data;
+  },
+
+  // --- LIVE ONBOARDING REQUEST ENDPOINTS ---
+  getPendingRequests: async (): Promise<OnboardingRequest[]> => {
+    const response = await apiClient.get(`/vendors/requests`);
+    return response.data;
+  },
+
+  approveVendorRequest: async (requestData: { userId: string; storeName: string; description: string; address: string; phone: string }): Promise<ApiVendor> => {
+    const response = await apiClient.post(`/vendors/requests/approve`, requestData);
+    return response.data;
+  },
+
+  rejectVendorRequest: async (requestId: string): Promise<void> => {
+    await apiClient.delete(`/vendors/requests/${requestId}`);
   }
 };

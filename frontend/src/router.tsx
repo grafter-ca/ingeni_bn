@@ -19,13 +19,14 @@ import OrderSuccess from "./pages/OrderSuccess";
 import MyOrders from "./pages/MyOrders";
 // Admin & Vendor Pages
 import Admin from "./pages/admin/Admin";
-import AdminProducts from "./pages/admin/products/productsList";
+import AdminProducts from "./pages/admin/products/AdminProduct";
 import Inventory from "./pages/vendor/Inventory";
 // Security
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import AdminCategories from "./pages/admin/category/AdminCategories";
 import AdminUserPage from "./pages/admin/users/AdminUserpage";
 import AdminOrdersPage from "./pages/admin/orders/AdminOrders";
+import AdminVendorPage from "./pages/admin/vendors/AdminVendorPage";
 import VendorOrdersPage from "./pages/vendor/Order";
 
 export const router = createBrowserRouter([
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
       { path: "products", element: <AdminProducts /> },
       {path:"orders", element: <AdminOrdersPage />},
       { path: "categories", element: <AdminCategories /> },
+      { path: "vendors", element: <AdminVendorPage /> },
       { path: "users", element: <AdminUserPage /> },
     ],
   },

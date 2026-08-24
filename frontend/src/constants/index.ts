@@ -13,8 +13,6 @@ export const LoginFields : { label: string; type: string; placeholder: string; f
   { label: "Password", type: "password", placeholder: "Password", field: "password" },
 ];
 
-
-
 export const values : ValueProps[] = [
   {
     icon: ShieldCheck,
@@ -49,4 +47,26 @@ export const navLinks = [
   { label: "Home",     path: "/"         },
   { label: "About",    path: "/about"    },
   { label: "Products", path: "/products" },
+];
+
+// PRODUCT SIDEBAR VARIABLES
+
+export const PRICE_BRACKETS = [
+  { label: "Under RF 1,000", min: 0, max: 1000 },
+  { label: "RF 1,000 - RF 5,000", min: 1000, max: 5000 },
+  { label: "RF 5,000 - RF 10,000", min: 5000, max: 10000 },
+  { label: "RF 10,000+", min: 10000, max: 200000 },
+];
+
+export   const availableStores = ["TechHub Kigali","Kigali Central Store", "Matrix Hardware", "Prime Gear Rwanda"];
+
+export // Major Rwandan districts / cities reference list
+const RWANDA_LOCATIONS = [
+  "Kicukiro",
+  "Nyarugenge",
+  "Musanze",
+  "Huye",
+  "Rwamagana",
+  "Bugesera",
+  "Nyagatare"
 ];

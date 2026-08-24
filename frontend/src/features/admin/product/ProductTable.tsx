@@ -43,7 +43,7 @@ export const ProductTable = () => {
     try {
       const formData = new FormData();
       formData.append("isActive", String(!currentStatus));
-      await updateProduct(productId);
+      await updateProduct(productId, formData);
       toast.success(`Listing status shifted to ${!currentStatus ? "LIVE" : "SUSPENDED"}`);
     } catch (err) {
       toast.error("Failed to alter remote listing visibility state.");

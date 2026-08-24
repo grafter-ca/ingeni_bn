@@ -14,16 +14,14 @@ import {
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import type { PaymentMethod } from "../types/api";
 import { useAuthState } from "../context/AuthContext";
-import  {PaymentSecurityGateModal}  from "../features/auth/PaymentSecurityGateModal";
+import { PaymentSecurityGateModal } from "../features/auth/PaymentSecurityGateModal";
 
 const CheckoutPage = () => {
   const { items, clearCart, getTotalPrice, getTotalItems } =
     useCartStore();
 
-  const {user} = useAuthState();
+  const { user } = useAuthState();
   const [showPaymentGate, setShowPaymentGate] = useState(false);
-
-  //trucling current user ID for order association, but allowing null for guests
   const userId = user?.id || null;
 
   const { createOrder, loading, error } = useOrderStore();
@@ -36,6 +34,7 @@ const CheckoutPage = () => {
   const total = getTotalPrice();
   const totalItems = getTotalItems();
 
+  // Shared payment method state to synchronize the buttons and form selector
   const [selectedPayment, setSelectedPayment] =
     useState<PaymentMethod>("MOBILE_MONEY");
 
@@ -47,14 +46,8 @@ const CheckoutPage = () => {
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-white">
-        <h2 className="text-2xl font-bold mb-4">
-          Your cart is empty
-        </h2>
-
-        <Link
-          to="/products"
-          className="text-blue-500 hover:underline"
-        >
+        <h2 className="text-2xl font-bold mb-4">Your cart is empty</h2>
+        <Link to="/products" className="text-blue-500 hover:underline">
           Continue Shopping
         </Link>
       </div>
@@ -69,24 +62,22 @@ const CheckoutPage = () => {
     shippingAddress,
     phoneNumber,
     paymentMethod,
+    paymentProofUrl,
   }: {
     shippingAddress: string;
     phoneNumber: string;
     paymentMethod: PaymentMethod;
+    paymentProofUrl?: string;
   }) => {
     try {
       const validatedItems = items.map((item) => {
-        const cleanId = item.productId.replace('local-', '').replace('fake-', '');
+        const cleanId = item.productId.replace("local-", "").replace("fake-", "");
         if (!item.productId) {
-          throw new Error(
-            `${item.name} is missing productId`
-          );
+          throw new Error(`${item.name} is missing productId`);
         }
 
         if (!item.vendorId) {
-          throw new Error(
-            `${item.name} is missing vendorId`
-          );
+          throw new Error(`${item.name} is missing vendorId`);
         }
 
         return {
@@ -101,17 +92,19 @@ const CheckoutPage = () => {
         shippingAddress,
         phoneNumber,
         paymentMethod,
+        paymentProofUrl, // Forward screenshot upload proof
         totalAmount: grandTotal,
         taxAmount: tax,
         shippingFees: shipping,
         user: {
           id: userId,
           name: user?.name || guestData?.name || "Guest User",
-          email: user?.email || guestData?.email || "<EMAIL>",
+          email: user?.email || guestData?.email || "guest@ingenistore.com",
           phoneNumber: user?.phone || guestData?.phone || "N/A",
         },
         userId,
       };
+
       const order = await createOrder(payload);
 
       console.log("Order created successfully:", order, "with payload:", payload);
@@ -127,18 +120,14 @@ const CheckoutPage = () => {
   return (
     <div className="min-h-screen bg-[#050505] text-white py-10 px-4">
       <div className="max-w-6xl mx-auto">
-        {/* SUPPORT */}
+        {/* SUPPORT SECTION */}
         <div className="mb-8 p-6 rounded-3xl bg-[#0a0a0a] border border-blue-500/20 flex flex-col md:flex-row justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="p-3 rounded-2xl bg-blue-600/10 text-blue-500">
               <Headset size={24} />
             </div>
-
             <div>
-              <h2 className="font-bold text-blue-400">
-                Need Help?
-              </h2>
-
+              <h2 className="font-bold text-blue-400">Need Help?</h2>
               <p className="text-sm text-gray-400">
                 Contact our support team anytime.
               </p>
@@ -165,7 +154,7 @@ const CheckoutPage = () => {
         </div>
 
         <div className="grid lg:grid-cols-12 gap-10">
-          {/* LEFT */}
+          {/* LEFT: Checkout Form & Payment Methods selector */}
           <div className="lg:col-span-7">
             <div className="flex items-center gap-3 mb-6">
               <button
@@ -185,17 +174,18 @@ const CheckoutPage = () => {
               loading={loading}
               error={error}
               totalAmount={grandTotal}
+              selectedPayment={selectedPayment}
+              onPaymentMethodChange={setSelectedPayment}
               defaultValues={{
                 shippingAddress: "Kigali",
-                phoneNumber: guestData?.phone || "",
+                phoneNumber: guestData?.phone || user?.phone || "",
                 paymentMethod: selectedPayment,
               }}
             />
 
-            {/* PAYMENT METHODS */}
             <div className="mt-8 bg-[#0a0a0a] border border-white/5 rounded-3xl p-6">
               <h3 className="text-xs uppercase tracking-widest text-gray-500 mb-4">
-                Payment Methods
+                Select Payment Method
               </h3>
 
               <div className="grid grid-cols-3 gap-3">
@@ -218,19 +208,18 @@ const CheckoutPage = () => {
                 ].map((method) => (
                   <button
                     key={method.id}
+                    type="button"
                     onClick={() =>
                       setSelectedPayment(
                         method.id as PaymentMethod
                       )
                     }
-                    className={`p-4 rounded-2xl border transition flex flex-col items-center gap-2 ${
-                      selectedPayment === method.id
-                        ? "bg-blue-600 border-blue-500"
-                        : "bg-[#050505] border-white/10"
-                    }`}
+                    className={`p-4 rounded-2xl border transition flex flex-col items-center gap-2 ${selectedPayment === method.id
+                      ? "bg-blue-600 border-blue-500 text-white"
+                      : "bg-[#050505] border-white/10 text-gray-400 hover:text-white"
+                      }`}
                   >
                     <method.icon size={20} />
-
                     <span className="text-xs font-bold uppercase">
                       {method.label}
                     </span>
@@ -240,12 +229,10 @@ const CheckoutPage = () => {
             </div>
           </div>
 
-          {/* Order summary */}
+          {/* RIGHT: Order Summary */}
           <div className="lg:col-span-5">
             <div className="sticky top-20 bg-[#0a0a0a] border border-white/5 rounded-3xl p-8">
-              <h2 className="text-xl font-bold mb-6">
-                Order Summary
-              </h2>
+              <h2 className="text-xl font-bold mb-6">Order Summary</h2>
 
               <div className="space-y-4 max-h-96 overflow-y-auto">
                 {items.map((item) => (
@@ -263,14 +250,13 @@ const CheckoutPage = () => {
                       <h3 className="font-medium text-sm">
                         {item.name}
                       </h3>
-
                       <p className="text-xs text-gray-500">
                         Qty: {item.quantity}
                       </p>
                     </div>
 
                     <div className="font-semibold text-sm">
-                      RF {" "}
+                      RF{" "}
                       {(
                         item.price * item.quantity
                       ).toLocaleString()}
@@ -281,72 +267,59 @@ const CheckoutPage = () => {
 
               <div className="border-t border-white/5 mt-8 pt-6 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">
-                    Subtotal
-                  </span>
-
-                  <span>
-                    RF {total.toLocaleString()}
-                  </span>
+                  <span className="text-gray-400">Subtotal</span>
+                  <span>RF {total.toLocaleString()}</span>
                 </div>
 
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Tax</span>
-
-                  <span>
-                    RF {tax.toLocaleString()}
-                  </span>
+                  <span className="text-gray-400">Tax (18%)</span>
+                  <span>RF {tax.toLocaleString()}</span>
                 </div>
 
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">
-                    Delivery
-                  </span>
-
-                  <span>
-                    RF {shipping.toLocaleString()}
-                  </span>
+                  <span className="text-gray-400">Delivery</span>
+                  <span>RF {shipping.toLocaleString()}</span>
                 </div>
 
-                <div className="flex justify-between text-lg font-bold border-t border-white/5 pt-4">
+                <div className="flex justify-between text-lg font-bold border-t border-white/5 pt-4 text-blue-400">
                   <span>Total</span>
-
-                  <span>
-                    RF {grandTotal.toLocaleString()}
-                  </span>
+                  <span>RF {grandTotal.toLocaleString()}</span>
                 </div>
               </div>
-            {/* open our modal if user is not logged in */}
-               {
-                !user && showPaymentGate && (
-                  <PaymentSecurityGateModal
-                    isOpen={showPaymentGate}
-                    onClose={() => setShowPaymentGate(false)}
-                    onProceedToPayment={() => {
-                      setShowPaymentGate(false);
-                       document
-                        .querySelector<HTMLFormElement>(
-                          "#checkout-form"
-                        )
-                        ?.requestSubmit();
-                    }}
-                  />
-                )
-              }
+
+              {/* Security modal for unauthenticated users */}
+              {!user && showPaymentGate && (
+                <PaymentSecurityGateModal
+                  isOpen={showPaymentGate}
+                  onClose={() => setShowPaymentGate(false)}
+                  onProceedToPayment={() => {
+                    setShowPaymentGate(false);
+                    document
+                      .querySelector<HTMLFormElement>(
+                        "#checkout-form"
+                      )
+                      ?.requestSubmit();
+                  }}
+                />
+              )}
+
               <button
-                onClick={() =>
-                  document
-                    .querySelector<HTMLFormElement>(
-                      "#checkout-form"
-                    )
-                    ?.requestSubmit()
-                }
+                type="button"
+                onClick={() => {
+                  if (!user) {
+                    setShowPaymentGate(true);
+                  } else {
+                    document
+                      .querySelector<HTMLFormElement>(
+                        "#checkout-form"
+                      )
+                      ?.requestSubmit();
+                  }
+                }}
                 disabled={loading}
-                className="w-full mt-8 py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 font-bold uppercase transition disabled:opacity-50"
+                className="w-full mt-8 py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 font-bold uppercase transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {loading
-                  ? "Processing..."
-                  : "Complete Purchase"}
+                {loading ? "Processing..." : "Complete Purchase"}
               </button>
             </div>
           </div>

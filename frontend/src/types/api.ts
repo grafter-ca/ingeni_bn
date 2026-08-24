@@ -1,4 +1,16 @@
 
+export type ProductFormData = {
+  title: string;
+  stock: number;
+  price: number;
+  description: string;
+  location: string;
+  images: string[];     // Existing image URLs
+  imageFiles: File[];   // New files from input
+  categoryId: string;
+  vendorId: string;
+};
+
 export type ApiProduct = {
   id: string;
   origin?: "local" | "fake";
@@ -6,8 +18,10 @@ export type ApiProduct = {
   stock: number;
   isActive?:boolean;
   price: number;
+  location?: string;
   description: string;
   images: string[];
+  imageFiles?: File[]; 
   category: ApiCategory;
   vendor?: ApiVendor;
   categoryId: string;
@@ -15,7 +29,7 @@ export type ApiProduct = {
 };
 
 export type ApiCategory = {
-  id: number | string; // Adjusted to string for merged categories
+  id: string;
   name: string;
   image: string;
 };
@@ -134,6 +148,7 @@ export interface OrderItem {
   id: string;
   orderId: string;
   productId: string;
+  vendorId?: string;
   product: ApiProduct; // Full product details for the UI
   quantity: number;
   priceAtPurchase: number;
@@ -153,7 +168,10 @@ export interface Order {
   paymentMethod: PaymentMethod;
   shippingAddress: string;
   phoneNumber: string;
+  email?: string;
+  user?: { id?: string; name?: string; email?: string; phone?: string };
   vendorId?: string; // Optional: For marketplace orders, to link back to the vendor
+  fulfillments?: Array<{ id: string; vendorId: string; revenue: number | string; status?: string; vendor?: ApiVendor }>; 
   createdAt: string; // ISO Date string
   updatedAt: string;
 }

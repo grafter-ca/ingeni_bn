@@ -49,6 +49,50 @@ export const productService = {
     return allProducts;
   },
 
+   /**
+   * AGGREGATED FETCH PRODUCT FOR PUBLIC (products/public)
+   */
+  getProductsPublic: async (filters: ProductFilters = {}): Promise<ApiProduct[]> => {
+    const params = new URLSearchParams();
+
+    // Map filters to query params
+    if (filters.title) params.append("title", filters.title);
+    if (filters.categoryName) params.append("categoryName", filters.categoryName);
+    if (filters.price_min) params.append("price_min", String(filters.price_min));
+    if (filters.price_max) params.append("price_max", String(filters.price_max));
+    params.append("limit", String(filters.limit ?? 20));
+    params.append("offset", String(filters.offset ?? 0));
+
+    const query = `?${params.toString()}`;
+
+    const [localRes, fakeRes] = await Promise.allSettled([
+      localApi.get<ApiProduct[]>(`/products/public${query}`),
+      fakeApiClient<ApiProduct[]>(`/products${query}`),
+    ]);
+
+    const allProducts: ApiProduct[] = [];
+
+    if (localRes.status === "fulfilled") {
+      allProducts.push(
+        ...localRes.value.map((p) => ({
+          ...p,
+          id: `local-${p.id}`,
+        }))
+      );
+    }
+
+    if (fakeRes.status === "fulfilled") {
+      allProducts.push(
+        ...fakeRes.value.map((p) => ({
+          ...p,
+          id: `fake-${p.id}`,
+        }))
+      );
+    }
+
+    return allProducts;
+  },
+
   /**
    * GET SINGLE PRODUCT
    */
@@ -75,11 +119,8 @@ export const productService = {
   /**
    * CREATE PRODUCT (LOCAL ONLY)
    */
-  createProduct: async (data: Partial<ApiProduct>): Promise<ApiProduct> => {
-    return await localApi.post<ApiProduct>(`/products`,{
-      methods:"POST",
-      body:JSON.stringify(data),
-    });
+  createProduct: async (data: FormData): Promise<ApiProduct> => {
+    return await localApi.post<ApiProduct>(`/products`,data);
   },
 
   /**
@@ -87,14 +128,11 @@ export const productService = {
    */
   updateProduct: async (
     id: string,
-    data: Partial<ApiProduct>
+    data: FormData
   ): Promise<ApiProduct> => {
     const realId = id.replace("local-", "");
 
-    return await localApi.patch<ApiProduct>(`/products/${realId}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
+    return await localApi.patch<ApiProduct>(`/products/${realId}`,data);
   },
 
   /**

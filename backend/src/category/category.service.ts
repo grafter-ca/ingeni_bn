@@ -17,7 +17,7 @@ export class CategoryService {
       throw new BadRequestException('Category name parameter is explicitly required');
     }
 
-    let resolvedImageUrl = data.image || ''; // Fallback string if directly provided
+    let resolvedImageUrl = data.image || ''; 
 
     // If a raw image stream is transmitted from the user's browser, pipe directly to Cloudinary
     if (file) {

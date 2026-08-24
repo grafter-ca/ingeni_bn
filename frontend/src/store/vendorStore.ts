@@ -1,7 +1,9 @@
+// src/store/vendorStore.ts
 import { create } from "zustand";
-import { vendorService, type ApiVendor, type VendorMetrics } from "../services/vendorService";
+import { vendorService } from "../services/vendorService";
+import type { ApiVendor, VendorMetrics } from "../types";
+import { socket } from "../libs/socket.client";
 
-// --- EXPANDED LOCAL INTERFACES FOR SYNCHRONIZATION ---
 export interface Order {
   id: string;
   orderNumber: string;
@@ -19,8 +21,22 @@ export interface VendorStats {
   productCount: number;
 }
 
+export interface OnboardingRequest {
+  id: string;
+  userId: string;
+  storeName?: string;
+  businessDescription?: string;
+  description?: string;
+  address?: string;
+  phone?: string;
+  user?: {
+    name?: string;
+    email: string;
+  };
+  submittedAt?: string;
+}
+
 interface VendorState {
-  // Data State
   vendors: ApiVendor[];
   filteredVendors: ApiVendor[];
   selectedVendor: ApiVendor | null;
@@ -28,41 +44,50 @@ interface VendorState {
   isLoading: boolean;
   error: string | null;
 
-  // --- COMPONENT STREAMING DATA EXTRACTIONS ---
   orders: Order[];
   stats: VendorStats | null;
+  pendingRequests: OnboardingRequest[];
+  isLoadingRequests: boolean;
 
-  // Filtering Context States
   searchQuery: string;
   statusFilter: "all" | "active" | "inactive";
 
-  // Form Management Buffer States (Modals / Creation Cards)
   isEditing: ApiVendor | null;
   formData: Omit<ApiVendor, "id" | "createdAt" | "_count">;
 
-  // Core Management Methods
   fetchVendors: (params?: any) => Promise<void>;
   fetchVendorDetails: (id: string) => Promise<void>;
-  fetchVendorDashboardData: () => Promise<void>; // Pulls orders & telemetry cards
+  fetchPendingRequests: () => Promise<void>;
+  fetchVendorDashboardData: () => Promise<void>;
+  fetchStorefrontMetrics: () => Promise<void>;
+  
   setSearchQuery: (query: string) => void;
   setStatusFilter: (status: "all" | "active" | "inactive") => void;
   applyFilters: () => void;
   
-  // Form Actions
   updateFormData: (data: Partial<VendorState["formData"]>) => void;
   setEditingVendor: (vendor: ApiVendor | null) => void;
 
-  // Data Writing Sync Pipeline (CRUD & Order Telemetry Mutations)
   addVendor: () => Promise<void>;
   updateVendor: (id: string) => Promise<void>;
   removeVendor: (id: string) => Promise<void>;
   toggleVendorStatus: (id: string, currentStatus: boolean) => Promise<void>;
+  approveVendorRequest: (requestData: { userId: string; storeName: string; description: string; address: string; phone: string }) => Promise<void>;
+  rejectVendorRequest: (requestId: string) => Promise<void>;
   updateOrderStatus: (orderId: string, nextStatus: Order['status']) => Promise<void>;
+  requestOnboarding: (description: string) => Promise<void>;
   clearFilters: () => void;
 }
 
+export const initializeSocketListeners = ( set: any) => {
+  socket.on('vendor:request-created', (newRequest) => {
+    set((state: any) => ({
+      pendingRequests: [newRequest, ...state.pendingRequests]
+    }));
+  });
+};
+
 export const useVendorStore = create<VendorState>((set, get) => ({
-  // --- INITIAL COMPONENT STATE ---
   vendors: [],
   filteredVendors: [],
   selectedVendor: null,
@@ -70,9 +95,10 @@ export const useVendorStore = create<VendorState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  // --- STREAMING PIPELINE STRUCTURAL ARRAYS ---
   orders: [],
   stats: null,
+  pendingRequests: [],
+  isLoadingRequests: false,
   
   searchQuery: "",
   statusFilter: "all",
@@ -87,25 +113,20 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     isActive: true,
   },
 
-  // --- BUSINESS LOGIC ACTIONS ---
   fetchVendors: async (params) => {
     set({ isLoading: true, error: null });
     try {
       const data = await vendorService.getVendors(params);
       set({ vendors: data, isLoading: false });
-      
-      // Keep search filters synchronizing smoothly
       get().applyFilters();
     } catch (err: any) {
       set({ error: err.message || "Failed to load vendors catalog", isLoading: false });
     }
   },
 
-  // fetchVendor by userid to pull detailed profile insights for dashboard and management views
   fetchVendorDetails: async (id) => {
     set({ isLoading: true, error: null, activeMetrics: null });
     try {
-      // Fetch both profile properties and operational performance tracking indices concurrently
       const [profile, metrics] = await Promise.all([
         vendorService.getVendorById(id),  
         vendorService.getVendorMetrics(id)
@@ -116,17 +137,26 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     }
   },
 
-  // --- TELEMETRY ORCHESTRATION PIPELINES ---
+  fetchPendingRequests: async () => {
+    set({ isLoadingRequests: true });
+    try {
+      // Connects to your backend endpoint for pending user onboarding requests
+      const data = await vendorService.getPendingRequests?.() || [];
+      set({ pendingRequests: data, isLoadingRequests: false });
+    } catch (err) {
+      console.error("Failed to fetch pending requests", err);
+      set({ isLoadingRequests: false });
+    }
+  },
+
   fetchVendorDashboardData: async () => {
     set({ isLoading: true, error: null });
     try {
-      // Direct integration points to service mapping layers
       const [ordersData, metricsData] = await Promise.all([
         vendorService.getVendorOrders?.() || Promise.resolve([]),
         vendorService.getStorefrontMetrics?.() || Promise.resolve(null)
       ]);
 
-      // Fallback fallback mappings if endpoints don't aggregate calculations instantly
       const mappedStats: VendorStats = metricsData || {
         revenue: ordersData.reduce((acc: number, curr: any) => curr.status === 'DELIVERED' ? acc + curr.totalAmount : acc, 0),
         activeOrders: ordersData.filter((o: any) => o.status === 'PENDING').length,
@@ -139,7 +169,15 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     }
   },
 
-  // --- RECONCILING ENGINE (SEARCH & FILTERS) ---
+  fetchStorefrontMetrics: async () => {
+    try {
+      const stats = await vendorService.getStorefrontMetrics();
+      set({ stats });
+    } catch (err: any) {
+      console.error("Failed to fetch storefront metrics", err);
+    }
+  },
+
   setSearchQuery: (query) => {
     set({ searchQuery: query });
     get().applyFilters();
@@ -154,7 +192,6 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     const { vendors, searchQuery, statusFilter } = get();
     let updatedList = [...vendors];
 
-    // 1. Text parsing evaluation against profile details
     if (searchQuery.trim()) {
       const targetQuery = searchQuery.toLowerCase().trim();
       updatedList = updatedList.filter(
@@ -165,7 +202,6 @@ export const useVendorStore = create<VendorState>((set, get) => ({
       );
     }
 
-    // 2. State-level status evaluation
     if (statusFilter !== "all") {
       const targetActiveState = statusFilter === "active";
       updatedList = updatedList.filter((v) => v.isActive === targetActiveState);
@@ -174,7 +210,6 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     set({ filteredVendors: updatedList });
   },
 
-  // --- CLIENT STRUCTURAL BUFFER FORM ACTIONS ---
   updateFormData: (data) =>
     set((state) => ({ formData: { ...state.formData, ...data } })),
 
@@ -192,7 +227,6 @@ export const useVendorStore = create<VendorState>((set, get) => ({
         }
       });
     } else {
-      // Clear out the state cleanly when preparing an entry modal
       set({
         isEditing: null,
         formData: {
@@ -207,7 +241,6 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     }
   },
 
-  // --- MUTATIVE DATA MODIFICATION PIPELINES (CRUD) ---
   addVendor: async () => {
     const { formData, fetchVendors } = get();
     if (!formData.name.trim() || !formData.storeName.trim()) {
@@ -218,7 +251,7 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     try {
       await vendorService.createVendor(formData);
       set({ isEditing: null });
-      await fetchVendors(); // Refresh our collection array state seamlessly
+      await fetchVendors();
     } catch (err: any) {
       set({ isLoading: false });
       throw err;
@@ -242,7 +275,6 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     set({ isLoading: true });
     try {
       await vendorService.deleteVendor(id);
-      // Remove element locally in real-time instantly without forcing secondary payload delays
       set((state) => {
         const nextVendors = state.vendors.filter((v) => v.id !== id);
         return {
@@ -262,10 +294,7 @@ export const useVendorStore = create<VendorState>((set, get) => ({
 
   toggleVendorStatus: async (id, currentStatus) => {
     try {
-      // Optimistically push structural switch statements right down to the data engine layer
       await vendorService.updateVendor(id, { isActive: !currentStatus });
-      
-      // Update our local state indices instantly
       set((state) => {
         const updated = state.vendors.map((v) => 
           v.id === id ? { ...v, isActive: !currentStatus } : v
@@ -278,20 +307,54 @@ export const useVendorStore = create<VendorState>((set, get) => ({
     }
   },
 
+  approveVendorRequest: async (requestData) => {
+    set({ isLoading: true });
+    try {
+      if (vendorService.approveVendorRequest) {
+        await vendorService.approveVendorRequest(requestData);
+      } else {
+        // Fallback default service call
+        await vendorService.createVendor({
+          name: requestData.storeName,
+          email: "",
+          storeName: requestData.storeName,
+          phone: requestData.phone,
+          isActive: true
+        });
+      }
+      await get().fetchVendors();
+      await get().fetchPendingRequests();
+      set({ isLoading: false });
+    } catch (err: any) {
+      set({ isLoading: false, error: err.message || "Failed to approve request" });
+      throw err;
+    }
+  },
+
+  rejectVendorRequest: async (requestId) => {
+    try {
+      if (vendorService.rejectVendorRequest) {
+        await vendorService.rejectVendorRequest(requestId);
+      }
+      set((state) => ({
+        pendingRequests: state.pendingRequests.filter((r) => r.id !== requestId)
+      }));
+    } catch (err) {
+      console.error("Failed to reject request", err);
+    }
+  },
+
   updateOrderStatus: async (orderId, nextStatus) => {
     try {
-      // 1. Invoke API Service mutation pipeline layer
       if (vendorService.updateOrderStatus) {
         await vendorService.updateOrderStatus(orderId, nextStatus);
       }
       
-      // 2. Perform optimistic state recalculation right on local arrays
       set((state) => {
         const updatedOrders = state.orders.map((o) =>
           o.id === orderId ? { ...o, status: nextStatus } : o
         );
 
-        // 3. Re-calculate administrative financial modules seamlessly
         const updatedStats = state.stats ? {
           ...state.stats,
           revenue: updatedOrders.reduce((acc, curr) => curr.status === 'DELIVERED' ? acc + curr.totalAmount : acc, 0),
@@ -307,6 +370,10 @@ export const useVendorStore = create<VendorState>((set, get) => ({
       console.error("Order adjustment handshake failure inside store module:", err);
       throw err;
     }
+  },
+
+  requestOnboarding: async (description) => {
+    await vendorService.requestOnboarding(description);
   },
 
   clearFilters: () => {

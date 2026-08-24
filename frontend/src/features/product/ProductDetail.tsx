@@ -51,9 +51,7 @@ export default function ProductDetail() {
   const [guestEmail, setGuestEmail] = useState("");
 
   const [guestPhone, setGuestPhone] = useState("");
-  const {products} = useProductStore();
-
-
+  const { products } = useProductStore();
 
   useEffect(() => {
     if (!id) return;
@@ -78,7 +76,7 @@ export default function ProductDetail() {
    * Normalize images safely
    */
 
-     // Suggested Products Slicing
+  // Suggested Products Slicing
   const suggestedProducts = useMemo(() => {
     return products.filter((p) => p.id !== id).slice(0, 4);
   }, [products, id]);
@@ -205,7 +203,7 @@ export default function ProductDetail() {
           label="Return to Catalog"
           icon={ArrowLeft}
           onClick={() => navigate("/products")}
-          className="border border-white/10 text-xs uppercase"
+          className="border border-white/10 text-xs uppercase cursor-pointer"
         />
       </div>
     );
@@ -222,7 +220,7 @@ export default function ProductDetail() {
 
             <button
               onClick={() => setIsCheckoutOpen(false)}
-              className="absolute top-5 right-5 text-gray-500 hover:text-white transition-colors"
+              className="absolute top-5 right-5 text-gray-500 hover:text-white transition-colors cursor-pointer"
             >
               <X size={20} />
             </button>
@@ -268,7 +266,7 @@ export default function ProductDetail() {
 
               <button
                 type="submit"
-                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest"
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest cursor-pointer transition-colors"
               >
                 Execute Transaction
               </button>
@@ -284,7 +282,7 @@ export default function ProductDetail() {
 
           <button
             onClick={() => navigate("/products")}
-            className="group flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-white transition-all uppercase tracking-wider"
+            className="group flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-white transition-all uppercase tracking-wider cursor-pointer"
           >
             <ArrowLeft
               size={14}
@@ -326,14 +324,14 @@ export default function ProductDetail() {
 
                   <button
                     onClick={handlePrevImage}
-                    className="pointer-events-auto p-2.5 bg-black/60 backdrop-blur-md text-white rounded-xl"
+                    className="pointer-events-auto p-2.5 bg-black/60 backdrop-blur-md text-white rounded-xl hover:bg-black/80 transition-colors cursor-pointer"
                   >
                     <ChevronLeft size={18} />
                   </button>
 
                   <button
                     onClick={handleNextImage}
-                    className="pointer-events-auto p-2.5 bg-black/60 backdrop-blur-md text-white rounded-xl"
+                    className="pointer-events-auto p-2.5 bg-black/60 backdrop-blur-md text-white rounded-xl hover:bg-black/80 transition-colors cursor-pointer"
                   >
                     <ChevronRight size={18} />
                   </button>
@@ -348,7 +346,7 @@ export default function ProductDetail() {
                 <button
                   key={i}
                   onClick={() => setImageIndex(i)}
-                  className={`shrink-0 w-20 h-20 rounded-2xl overflow-hidden border-2 transition-all ${
+                  className={`shrink-0 w-20 h-20 rounded-2xl overflow-hidden border-2 transition-all cursor-pointer ${
                     i === imageIndex
                       ? "border-blue-500 scale-95"
                       : "border-transparent opacity-40 hover:opacity-100"
@@ -446,38 +444,39 @@ export default function ProductDetail() {
               </div>
 
               {/* Action Button for quantity change */}
-              < div className="flex items-center gap-4 mt-2">
-
+              <div className="flex items-center gap-4 mt-2">
                 <div className="flex items-center gap-2"> 
                   <Button
                     label="-"
                     onClick={() => handleQuantityChange(-1)}
-                    className="w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                    className="w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white rounded-lg cursor-pointer"
                   />
-                  <span className="text-sm font-medium">{quantity}</span>
+                  <span className="text-sm font-medium w-6 text-center">{quantity}</span>
                   <Button
                     label="+"   
                     onClick={() => handleQuantityChange(1)}
-                    className="w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                    className="w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white rounded-lg cursor-pointer"
                   />
                 </div>
-                </div>
+              </div>
 
-              <div className="pt-4 border-t border-white/5">
+              <div className="pt-4 border-t border-white/5 space-y-3">
                 <Button
                   label={added ? "Added to Cart" : "Add to Cart"}
                   icon={added ? Check : ShoppingCart}
                   onClick={handleAddToCartClick}
                   disabled={added}
-                  className="w-full py-4 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-bold uppercase tracking-widest"
+                  className="w-full py-4 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors"
                 />
+                
+
                 <Button
                   label={"Continue Shopping"}
                   icon={ArrowLeft}
                   iconPosition="left"
                   onClick={() => navigate("/products")}
                   disabled={added}
-                  className="w-full mt-3 py-4 flex items-center justify-center bg-transparent border border-white/10 hover:border-white/20 text-gray-500 hover:text-white rounded-2xl text-xs font-bold uppercase tracking-widest"
+                  className="w-full py-4 flex items-center justify-center bg-transparent border border-white/10 hover:border-white/20 text-gray-500 hover:text-white rounded-2xl text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors"
                 />
               </div>
             </div>
@@ -492,40 +491,40 @@ export default function ProductDetail() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-  {/* Card 1: Quality Assurance */}
-  <motion.div 
-    whileHover={{ y: -5 }}
-    className="bg-[#0b0b0b] border border-white/5 rounded-3xl p-5 flex items-center gap-4 cursor-pointer"
-  >
-    <div className="w-12 h-12 shrink-0 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
-      <Check size={20} className="text-green-400" />
-    </div>
-    <div>
-      <p className="text-[10px] uppercase tracking-[0.2em] text-green-500 font-bold">Trusted Node</p>
-      <h3 className="text-sm font-black text-green-400">Quality Assured</h3>
-    </div>
-  </motion.div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Card 1: Quality Assurance */}
+              <motion.div 
+                whileHover={{ y: -5 }}
+                className="bg-[#0b0b0b] border border-white/5 rounded-3xl p-5 flex items-center gap-4 cursor-pointer"
+              >
+                <div className="w-12 h-12 shrink-0 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+                  <Check size={20} className="text-green-400" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-green-500 font-bold">Trusted Node</p>
+                  <h3 className="text-sm font-black text-green-400">Quality Assured</h3>
+                </div>
+              </motion.div>
 
-  {/* Card 2: Secure Transit */}
-  <motion.div 
-    whileHover={{ y: -5 }}
-    className="bg-[#0b0b0b] border border-white/5 rounded-3xl p-5 flex items-center gap-4 cursor-pointer"
-  >
-    <div className="w-12 h-12 shrink-0 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-      <Shield size={20} className="text-blue-400" />
-    </div>
-    <div>
-      <p className="text-[10px] uppercase tracking-[0.2em] text-blue-500 font-bold">Secure Node</p>
-      <h3 className="text-sm font-black text-blue-400">Verified Transit</h3>
-    </div>
-  </motion.div>
-</div>
+              {/* Card 2: Secure Transit */}
+              <motion.div 
+                whileHover={{ y: -5 }}
+                className="bg-[#0b0b0b] border border-white/5 rounded-3xl p-5 flex items-center gap-4 cursor-pointer"
+              >
+                <div className="w-12 h-12 shrink-0 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                  <Shield size={20} className="text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-blue-500 font-bold">Secure Node</p>
+                  <h3 className="text-sm font-black text-blue-400">Verified Transit</h3>
+                </div>
+              </motion.div>
+            </div>
           </div>
         </div>
 
         {/* Suggested Alternatives */}
-        <section className="py-16 mt-16 border-t border-white/5">
+        <section className="mt-16 border-t border-white/5 pt-12">
           <h2 className="text-xl font-black uppercase tracking-widest mb-8">Suggested Alternatives</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {suggestedProducts.map((p) => <ProductCard key={p.id} product={p} />)}

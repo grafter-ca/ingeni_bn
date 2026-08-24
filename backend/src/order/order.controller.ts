@@ -1,11 +1,11 @@
-import { 
-  Controller, Get, Post, Body, Param, Patch, Req, Query, 
-  ForbiddenException, UseGuards 
+import {
+  Controller, Get, Post, Body, Param, Patch, Req, Query,
+  ForbiddenException, UseGuards
 } from '@nestjs/common';
 import { OrderService } from './order.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
-import { UserRole, OrderStatus } from '../../generated/prisma/client.js';
+import { UserRole, OrderStatus, PaymentStatus } from '../../generated/prisma/client.js';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 
 // Helper function to sanitize IDs to ensure database compatibility
@@ -13,13 +13,13 @@ const clean = (id: string) => id.replace('local-', '').replace('fake-', '');
 
 @Controller('orders')
 export class OrderController {
-  constructor(private readonly orderService: OrderService) {}
+  constructor(private readonly orderService: OrderService) { }
 
   // --- CREATE ORDER ---
   @Post()
   async create(@Body() dto: CreateOrderDto, @Req() req: any) {
     const userId = req.user?.id;
-    
+
     // Sanitize productId for every item in the order
     const sanitizedDto = {
       ...dto,
@@ -28,7 +28,7 @@ export class OrderController {
         productId: clean(item.productId)
       }))
     };
-    
+
     return this.orderService.createOrder(userId, sanitizedDto);
   }
 
@@ -39,6 +39,7 @@ export class OrderController {
     return this.orderService.getOrdersByUser(req.user.id);
   }
 
+
   // --- VENDOR DASHBOARD ---
   @UseGuards(AuthGuard)
   @Get('vendor/dashboard')
@@ -46,7 +47,7 @@ export class OrderController {
     if (req.user.role !== UserRole.vendor) {
       throw new ForbiddenException('Access limited to active marketplace vendors');
     }
-    
+
     const vendorId = await this.orderService.getVendorIdByUserId(req.user.id);
     return this.orderService.getOrdersForVendor(vendorId);
   }
@@ -65,9 +66,8 @@ export class OrderController {
   @UseGuards(AuthGuard)
   @Get(':id')
   async getOrderDetails(@Param('id') id: string, @Req() req: any) {
-    // Sanitized ID used for lookup
     const order = await this.orderService.getOne(clean(id));
-    
+
     const isOwner = order.userId === req.user.id;
     const isAdmin = req.user.role === UserRole.admin;
     const isVendor = req.user.role === UserRole.vendor;
@@ -76,6 +76,14 @@ export class OrderController {
       throw new ForbiddenException('You do not have access to view this order transaction');
     }
     return order;
+  }
+
+  @Patch(':id/payment-status')
+  async updatePaymentStatus(
+    @Param('id') id: string,
+    @Body('paymentStatus') paymentStatus: PaymentStatus,
+  ) {
+    return this.orderService.updatePaymentStatus(id, paymentStatus);
   }
 
   // --- UPDATE ORDER STATUS ---
@@ -89,7 +97,6 @@ export class OrderController {
     if (![UserRole.admin, UserRole.vendor].includes(req.user.role)) {
       throw new ForbiddenException('Status mutations require merchant or store staff role access');
     }
-    // Use sanitized ID for status update
     return this.orderService.updateStatus(clean(id), dto.status as OrderStatus);
   }
 }

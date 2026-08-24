@@ -10,7 +10,6 @@ export interface RegisterProps {
     confirmPassword? : string;
 }
 
-
 export interface LoginProps {
     email?: string;
     password?: string;
@@ -78,4 +77,38 @@ export interface VendorDashboardData {
     productCount: string;
   } | null;
   orders: Order[];
+}
+
+// Define the core structures for data type safety
+export interface ApiVendor {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  logoUrl?: string;
+  storeName: string;
+  isActive: boolean;
+  createdAt: string;
+  _count?: {
+    products: number;
+    orders: number;
+  };
+}
+
+export interface VendorMetrics {
+  totalSales: number;
+  totalProducts: number;
+  activeOrders: number;
+}
+
+// Added structural interfaces matching our order management pipeline
+export interface ApiOrder {
+  id: string;
+  orderNumber: string;
+  totalAmount: number;
+  status: 'PENDING' | 'DELIVERED' | 'SHIPPED' | 'CANCELLED';
+  user?: {
+    name: string;
+  };
+  createdAt: string;
 }

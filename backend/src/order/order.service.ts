@@ -18,13 +18,9 @@ import type { CreateOrderDto } from './dto/create-order.dto.js';
 export class OrderService {
   constructor(private prisma: PrismaService) {}
 
-  // =========================================================
   // CREATE ORDER
   // =========================================================
   async createOrder(userId: string | null, dto: CreateOrderDto) {
-    // -------------------------------------------------------
-    // VALIDATE ITEMS
-    // -------------------------------------------------------
     if (!dto.items || dto.items.length === 0) {
       throw new BadRequestException('Order items are required');
     }
@@ -42,9 +38,7 @@ export class OrderService {
     if (dbProducts.length !== productIds.length) {
       throw new BadRequestException('One or more products not found');
     }
-    // -------------------------------------------------------
-    // CALCULATIONS
-    // -------------------------------------------------------
+
     let subtotal = 0;
 
     const orderItemsData = dto.items.map((item) => {
@@ -54,7 +48,6 @@ export class OrderService {
         throw new BadRequestException(`Product ${item.productId} not found`);
       }
 
-      // STOCK CHECK
       if (product.stock < item.quantity) {
         throw new BadRequestException(
           `Insufficient stock for ${product.title}`,
@@ -62,7 +55,6 @@ export class OrderService {
       }
 
       const unitPrice = Number(product.price);
-
       subtotal += unitPrice * item.quantity;
 
       return {
@@ -80,22 +72,14 @@ export class OrderService {
         (vendorRevenueMap[item.vendorId] || 0) + itemTotal;
     });
 
-    // -------------------------------------------------------
-    // TOTALS
-    // -------------------------------------------------------
     const taxAmount = dto.taxAmount ?? Number((subtotal * 0.18).toFixed(2));
-
     const shippingFees = dto.shippingFees ?? 2000;
-
     const totalAmount =
       dto.totalAmount ??
       Number((subtotal + taxAmount + shippingFees).toFixed(2));
-    // -------------------------------------------------------
-    // USER HANDLING
-    // -------------------------------------------------------
+
     let finalUserId = userId;
 
-    // Create guest user automatically if not logged in
     if (!finalUserId) {
       const guestEmail =
         dto.user?.email || `guest-${Date.now()}@ingeristore.rw`;
@@ -112,258 +96,280 @@ export class OrderService {
 
       finalUserId = guestUser.id;
     }
+
     // -------------------------------------------------------
-    // TRANSACTION
+    // TRANSACTION (With extended timeout: 10000ms)
     // -------------------------------------------------------
-    return this.prisma.$transaction(async (tx) => {
-      const orderNumber = `ING-${Date.now()}`;
-      // ---------------------------------------------------
-      // UPDATE STOCK
-      // ---------------------------------------------------
-      for (const item of orderItemsData) {
-        await tx.product.update({
-          where: {
-            id: item.productId,
-          },
+    const orderId = await this.prisma.$transaction(
+      async (tx) => {
+        const orderNumber = `ING-${Date.now()}`;
+
+        // Update stock
+        for (const item of orderItemsData) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: item.quantity } },
+          });
+        }
+
+        // Create Order
+        const order = await tx.order.create({
           data: {
-            stock: {
-              decrement: item.quantity,
+            orderNumber,
+            userId: finalUserId!,
+            totalAmount,
+            taxAmount,
+            email: dto.user?.email || 'unknown',
+            shippingFees,
+            shippingAddress: dto.shippingAddress,
+            phoneNumber: dto.phoneNumber,
+            paymentMethod: dto.paymentMethod as PaymentMethod,
+            status: OrderStatus.PENDING,
+            paymentStatus: PaymentStatus.INITIALIZED,
+            items: {
+              create: orderItemsData.map((item) => ({
+                productId: item.productId,
+                vendorId: item.vendorId,
+                quantity: item.quantity,
+                priceAtPurchase: item.priceAtPurchase,
+              })),
             },
           },
         });
-      }
 
-      // ---------------------------------------------------
-      // CREATE ORDER
-      // ---------------------------------------------------
-      const order = await tx.order.create({
-        data: {
-          orderNumber,
-          userId: finalUserId!,
-          totalAmount,
-          taxAmount,
-          email: dto.user?.email || 'unknown',
-          shippingFees,
-          shippingAddress: dto.shippingAddress,
-          phoneNumber: dto.phoneNumber,
-          paymentMethod: dto.paymentMethod as PaymentMethod,
-          status: OrderStatus.PENDING,
-          paymentStatus: PaymentStatus.INITIALIZED,
-
-          items: {
-            create: orderItemsData.map((item) => ({
-              productId: item.productId,
-              vendorId: item.vendorId,
-              quantity: item.quantity,
-              priceAtPurchase: item.priceAtPurchase,
-            })),
-          },
-        },
-
-        include: {
-          items: {
-            include: {
-              product: {
-                include: {
-                  images: true,
-                },
-              },
+        // Create Fulfillments
+        for (const [vendorId, revenue] of Object.entries(vendorRevenueMap)) {
+          await tx.fulfillment.create({
+            data: {
+              orderId: order.id,
+              vendorId: vendorId,
+              revenue: revenue,
+              status: OrderStatus.PENDING,
             },
-          },
+          });
+        }
 
-          payment: true,
-        },
-      });
-
-      // ---------------------------------------------------
-      // CREATE FULFILLMENT RECORDS FOR EACH VENDOR
-      // ---------------------------------------------------
-      for (const [vendorId, revenue] of Object.entries(vendorRevenueMap)) {
-        await tx.fulfillment.create({
+        // Create Payment
+        await tx.payment.create({
           data: {
             orderId: order.id,
-            vendorId: vendorId,
-            revenue: revenue, // Vendor-specific revenue
-            status: OrderStatus.PENDING,
+            userId: finalUserId!,
+            amount: totalAmount,
+            transactionRef: `PAY-${orderNumber}`,
+            status: PaymentStatus.INITIALIZED,
+            paymentProofUrl: dto.paymentProofUrl || null,
+            provider:
+              dto.paymentMethod === 'MOBILE_MONEY'
+                ? 'MTN_MOMO'
+                : dto.paymentMethod === 'CREDIT_CARD'
+                ? 'FLUTTERWAVE'
+                : 'CASH',
+          },
+        });
+
+        return order.id;
+      },
+      { timeout: 10000 },
+    );
+
+    return await this.getOne(orderId);
+  }
+
+  // UPDATE PAYMENT STATUS & AUTOMATICALLY COMPUTE COMMISSION
+  // =========================================================
+  async updatePaymentStatus(
+    orderId: string,
+    paymentStatus: PaymentStatus,
+    transactionRef?: string,
+  ) {
+    return await this.prisma.$transaction(async (tx) => {
+      const existingOrder = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: true, payment: true },
+      });
+
+      if (!existingOrder) {
+        throw new NotFoundException('Order record not found');
+      }
+
+      // 1. Update Order payment state
+      const updatedOrder = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          paymentStatus,
+        },
+      });
+
+      // 2. Sync Payment record status
+      if (existingOrder.payment) {
+        await tx.payment.update({
+          where: { orderId },
+          data: {
+            status: paymentStatus,
+            ...(transactionRef ? { transactionRef } : {}),
           },
         });
       }
 
-      // ---------------------------------------------------
-      // CREATE PAYMENT RECORD
-      // ---------------------------------------------------
-      await tx.payment.create({
-        data: {
-          orderId: order.id,
+      // 🔥 3. Automatically process commission if delivered & paid
+      await this.processOrderCommission(orderId, tx);
 
-          userId: finalUserId!,
-
-          amount: totalAmount,
-
-          transactionRef: `PAY-${orderNumber}`,
-
-          status: PaymentStatus.INITIALIZED,
-
-          provider:
-            dto.paymentMethod === 'MOBILE_MONEY'
-              ? 'MTN_MOMO'
-              : dto.paymentMethod === 'CREDIT_CARD'
-                ? 'FLUTTERWAVE'
-                : 'CASH',
-        },
-      });
-      // ---------------------------------------------------
-      // RETURN COMPLETE ORDER
-      // ---------------------------------------------------
-      return await tx.order.findUnique({
-        where: {
-          id: order.id,
-        },
-
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phone: true,
-            },
-          },
-
-          items: {
-            include: {
-              product: {
-                include: {
-                  images: true,
-                },
-              },
-            },
-          },
-
-          payment: true,
-        },
-      });
+      return updatedOrder;
     });
   }
+
+  // COMMISSION CALCULATION HELPER
   // =========================================================
+  async processOrderCommission(orderId: string, tx: any) {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { items: { include: { product: true } } },
+    });
+
+    // Ensure order is paid AND delivered before releasing commission
+    if (!order || order.paymentStatus !== PaymentStatus.SUCCESS || order.status !== OrderStatus.DELIVERED) {
+      return;
+    }
+
+    const totalAmount = Number(order.totalAmount);
+    const commissionRate = 0.10; // 10% platform take
+    const commissionAmount = Number((totalAmount * commissionRate).toFixed(2));
+    const vendorEarnings = Number((totalAmount - commissionAmount).toFixed(2));
+
+    // Update order record with computed commission details
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        commissionRate: commissionRate,
+        commissionAmount: commissionAmount,
+        vendorEarnings: vendorEarnings,
+        payoutStatus: 'PENDING',
+      },
+    });
+
+    // Update per-vendor fulfillment records
+    for (const item of order.items) {
+      const itemRevenue = Number(item.priceAtPurchase) * item.quantity;
+      const itemCommission = itemRevenue * commissionRate;
+      const itemVendorEarnings = itemRevenue - itemCommission;
+
+      await tx.fulfillment.updateMany({
+        where: {
+          orderId: orderId,
+          vendorId: item.vendorId,
+        },
+        data: {
+          revenue: itemVendorEarnings,
+          status: OrderStatus.DELIVERED,
+        },
+      });
+    }
+  }
+
   // GET USER ORDERS
   // =========================================================
   async getOrdersByUser(userId: string) {
     return this.prisma.order.findMany({
-      where: {
-        userId,
-      },
-
+      where: { userId },
       include: {
         items: {
           include: {
             product: {
-              include: {
-                images: true,
-              },
+              include: { images: true, category: true, vendor: true },
             },
           },
         },
-
         payment: true,
+        fulfillments: { include: { vendor: true } },
       },
-
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
   }
-  // =========================================================
+
   // GET VENDOR ORDERS
   // =========================================================
   async getOrdersForVendor(vendorId: string) {
-    return this.prisma.fulfillment.findMany({
+    return this.prisma.order.findMany({
       where: {
-        vendorId,
-      },
-      include: {
-        order: {
-          include: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-                phone: true,
-              },
-            },
-            items: {
-              where: {
-                vendorId,
-              },
-              include: {
-                product: {
-                  include: {
-                    images: true,
-                  },
-                },
-              },
-            },
-            payment: true,
+        items: {
+          some: {
+            product: { vendorId: vendorId },
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
+      include: {
+        user: { select: { name: true, email: true, phone: true } },
+        items: {
+          include: {
+            product: {
+              include: { images: true, category: true, vendor: true },
+            },
+          },
+        },
+        payment: true,
+        fulfillments: { include: { vendor: true } },
       },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  // =========================================================
   // GET ALL ORDERS
   // =========================================================
   async getAllOrders(status?: string) {
     return this.prisma.order.findMany({
-      where: status
-        ? {
-            status: status as OrderStatus,
-          }
-        : {},
-
+      where: status ? { status: status as OrderStatus } : {},
       include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-
+        user: { select: { name: true, email: true, phone: true } },
         items: {
           include: {
             product: {
-              include: {
-                images: true,
-              },
+              include: { images: true, category: true, vendor: true },
             },
           },
         },
-
         payment: true,
+        fulfillments: { include: { vendor: true } },
       },
-
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  // =========================================================
   // UPDATE ORDER STATUS
   // =========================================================
   async updateStatus(orderId: string, status: OrderStatus) {
     return await this.prisma.$transaction(async (tx) => {
-      // Update the status
+      const existingOrder = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: { include: { product: true } } },
+      });
+
+      if (!existingOrder) {
+        throw new NotFoundException('Order record not found');
+      }
+
+      const isBecomingDelivered = 
+        status === OrderStatus.DELIVERED && existingOrder.status !== OrderStatus.DELIVERED;
+
+      if (isBecomingDelivered) {
+        for (const item of existingOrder.items) {
+          if (item.product.stock < item.quantity) {
+            throw new BadRequestException(
+              `Insufficient stock for product: ${item.product.title}. Available: ${item.product.stock}, Required: ${item.quantity}`
+            );
+          }
+
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: item.quantity } },
+          });
+        }
+      }
+
       const updatedOrder = await tx.order.update({
         where: { id: orderId },
         data: { status },
       });
 
-      // Create the history entry
       await tx.orderHistory.create({
         data: {
           orderId: orderId,
@@ -371,22 +377,19 @@ export class OrderService {
         },
       });
 
+      // 🔥 Automatically process commission if delivered & paid
+      await this.processOrderCommission(orderId, tx);
+
       return updatedOrder;
     });
   }
 
-  // =========================================================
   // GET VENDOR ID FROM USER ID
   // =========================================================
   async getVendorIdByUserId(userId: string): Promise<string> {
     const vendor = await this.prisma.vendor.findUnique({
-      where: {
-        userId,
-      },
-
-      select: {
-        id: true,
-      },
+      where: { userId },
+      select: { id: true },
     });
 
     if (!vendor) {
@@ -396,39 +399,22 @@ export class OrderService {
     return vendor.id;
   }
 
-  // =========================================================
   // GET SINGLE ORDER
   // =========================================================
   async getOne(id: string) {
     const order = await this.prisma.order.findUnique({
-      where: {
-        id,
-      },
-
+      where: { id },
       include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-
+        user: { select: { name: true, email: true, phone: true } },
         items: {
           include: {
             product: {
-              include: {
-                images: true,
-              },
+              include: { images: true, category: true, vendor: true },
             },
           },
         },
         payment: true,
-        fulfillments: {
-          include: {
-            vendor: true,
-          },
-        },
+        fulfillments: { include: { vendor: true } },
       },
     });
 

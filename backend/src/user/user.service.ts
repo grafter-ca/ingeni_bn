@@ -75,6 +75,22 @@ export class UserService {
       where: { id: targetUserId },
       data: { role: newRole },
     });
+
+    // Auto-create vendor profile if upgrading to vendor
+    if (newRole === 'vendor') {
+      const existingVendor = await this.prisma.vendor.findUnique({
+        where: { userId: targetUserId },
+      });
+      if (!existingVendor) {
+        await this.prisma.vendor.create({
+          data: {
+            userId: targetUserId,
+            storeName: `${user.name}'s Store`,
+          },
+        });
+      }
+    }
+
     return user;
   }
 
@@ -84,6 +100,22 @@ export class UserService {
       where: { id: userId },
       data: { role: requestedRole },
     });
+
+    // Auto-create vendor profile if upgrading to vendor
+    if (requestedRole === 'vendor') {
+      const existingVendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+      if (!existingVendor) {
+        await this.prisma.vendor.create({
+          data: {
+            userId,
+            storeName: `${user.name}'s Store`,
+          },
+        });
+      }
+    }
+
     return user;
   }
   
@@ -102,6 +134,21 @@ export class UserService {
       where: { id: targetUserId },
       data: { role: targetUser.role },
     });
+
+    // Auto-create vendor profile if upgrading to vendor
+    if (targetUser.role === 'vendor') {
+      const existingVendor = await this.prisma.vendor.findUnique({
+        where: { userId: targetUserId },
+      });
+      if (!existingVendor) {
+        await this.prisma.vendor.create({
+          data: {
+            userId: targetUserId,
+            storeName: `${updatedUser.name}'s Store`,
+          },
+        });
+      }
+    }
 
     return updatedUser;
   }

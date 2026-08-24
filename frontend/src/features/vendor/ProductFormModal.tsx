@@ -88,10 +88,10 @@ const ProductFormModal = ({ onFormSuccess }: ProductFormProps) => {
 
     try {
       if (isEditing) {
-        await updateProduct(isEditing.id);
+        await updateProduct(isEditing.id, uploadData);
         toast.success("Catalog information written to remote node successfully.");
       } else {
-        await addProduct(computedVendorId);
+        await addProduct(computedVendorId, uploadData);
         toast.success("New marketplace document published successfully.");
       }
       

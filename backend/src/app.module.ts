@@ -10,6 +10,9 @@ import { CategoryModule } from './category/category.module.js';
 import { OrderService } from './order/order.service.js';
 import { OrderModule } from './order/order.module.js';
 import { CloudinaryModule } from './libs/cloudinary/cloudinary.module.js';
+import { VendorsModule } from './vendors/vendors.module.js';
+import { SocketModule } from './socket/socket.module.js';
+import { AnalyticsModule } from './analytics/analytics.module.js';
 
 @Module({
   imports: [
@@ -28,10 +31,13 @@ import { CloudinaryModule } from './libs/cloudinary/cloudinary.module.js';
       },
     }),
     ProductsModule,
+    SocketModule,
+    VendorsModule,
     UserModule,
     CategoryModule,
     OrderModule,
-    CloudinaryModule
+    CloudinaryModule,
+    AnalyticsModule
   ],
   controllers: [],
   providers: [OrderService],

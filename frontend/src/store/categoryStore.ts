@@ -5,10 +5,10 @@ interface CategoryState {
   categories: Category[];
   loading: boolean;
   isEditing: Category | null;
-  formData: { name: string; image: string };
+  formData: { name: string; image: string | File };
   
   // Actions
-  setFormData: (data: { name: string; image: string }) => void;
+  setFormData: (data: { name: string; image: string | File }) => void;
   setIsEditing: (category: Category | null) => void;
   
   // Async Actions (Side Effects)
@@ -45,11 +45,22 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   saveCategory: async () => {
     const { isEditing, formData, fetchCategories } = get();
     try {
-      if (isEditing) {
-        await categoryApi.update(isEditing.id, formData);
-      } else {
-        await categoryApi.create(formData);
+      // If your API accepts multipart/form-data for file uploads, wrap it here:
+      const payload = new FormData();
+      payload.append("name", formData.name);
+      
+      if (formData.image instanceof File) {
+        payload.append("image", formData.image);
+      } else if (typeof formData.image === "string") {
+        payload.append("image", formData.image);
       }
+
+      if (isEditing) {
+        await categoryApi.update(isEditing.id, payload as any);
+      } else {
+        await categoryApi.create(payload as any);
+      }
+      
       set({ isEditing: null, formData: { name: "", image: "" } });
       await fetchCategories(); // Refresh list
     } catch (error) {

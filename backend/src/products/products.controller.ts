@@ -1,3 +1,4 @@
+// src/products/products.controller.ts
 import {
   Controller,
   Get,
@@ -23,12 +24,69 @@ export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
     private readonly cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
+
+  @Get('public')
+  @AllowAnonymous()
+  async getAllPublic(@Query() query: any) {
+    return this.productsService.findAll(query, true);
+  }
 
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles(['vendor', 'admin'])
+  async getAllPrivate(@Query() query: any, @Req() req: any) {
+    const currentUser = req.user || req.session?.user || req.auth;
+    const userContext = { id: currentUser?.id || currentUser?.sub, role: currentUser?.role };
+    return this.productsService.findAll(query, false, userContext);
+  }
+
+  @Get('search')
   @AllowAnonymous()
- async getAllPublic(@Query() query: any) {
-    return this.productsService.findAll(query, true);
+  async searchProducts(@Query('q') q: string) {
+    return this.productsService.searchProducts(q);
+  }
+
+  // --- REVIEWS: GET REVIEWS FOR A PRODUCT ---
+  @Get(':id/reviews')
+  @AllowAnonymous()
+  async getProductReviews(@Param('id') id: string) {
+    const cleanId = id.replace('local-', '').replace('fake-', '');
+    return this.productsService.getProductReviews(cleanId);
+  }
+
+  // --- REVIEWS: POST A NEW REVIEW (Allowed for Anonymous) ---
+  @Post(':id/reviews')
+  @AllowAnonymous()
+  async addProductReview(
+    @Param('id') id: string,
+    @Body() dto: { rating: number; comment: string; authorName?: string },
+    @Req() req: any,
+  ) {
+    const cleanId = id.replace('local-', '').replace('fake-', '');
+    const currentUser = req.user || req.session?.user || req.auth;
+    const userId = currentUser?.id || currentUser?.sub;
+    return this.productsService.addProductReview(cleanId, dto, userId);
+  }
+
+  // --- WISHLIST: CHECK STATUS (Allowed for Anonymous) ---
+  @Get(':id/wishlist/status')
+  @AllowAnonymous()
+  async checkWishlistStatus(@Param('id') id: string, @Req() req: any) {
+    const cleanId = id.replace('local-', '').replace('fake-', '');
+    const currentUser = req.user || req.session?.user || req.auth;
+    const userId = currentUser?.id || currentUser?.sub;
+    return this.productsService.checkWishlistStatus(cleanId, userId);
+  }
+
+  // --- WISHLIST: TOGGLE STATUS (ADD/REMOVE) ---
+  @Post(':id/wishlist/toggle')
+  @AllowAnonymous()
+  async toggleWishlist(@Param('id') id: string, @Req() req: any) {
+    const cleanId = id.replace('local-', '').replace('fake-', '');
+    const currentUser = req.user || req.session?.user || req.auth;
+    const userId = currentUser?.id || currentUser?.sub;
+    return this.productsService.toggleWishlist(cleanId, userId);
   }
 
   @Get(':id')
@@ -37,16 +95,6 @@ export class ProductsController {
     const cleanId = id.replace('local-', '').replace('fake-', '');
     return this.productsService.findOne(cleanId);
   }
-
-  @Get()
-  @UseGuards(RolesGuard)
-  @Roles(['vendor', 'admin'])
-  async getAllPrivate(@Query() query: any, @Req() req: any) {
-    // Force ownership context
-    const userContext = { id: req.user.id, role: req.user.role };
-    return this.productsService.findAll(query, false, userContext);
-  }
-
 
   @Post()
   @UseGuards(RolesGuard)
@@ -57,18 +105,35 @@ export class ProductsController {
     @Body() dto: any,
     @Req() req: any,
   ) {
-    let imageUrls: string[] = [];
-    if (files && files.length > 0) {
-      const uploadResults = await this.cloudinaryService.uploadMultipleFiles(files);
-      imageUrls = uploadResults.map((res) => res.secure_url);
-    }
+    try {
+      let imageUrls: string[] = [];
+      if (files && files.length > 0) {
+        const uploadResults = await this.cloudinaryService.uploadMultipleFiles(files);
+        imageUrls = uploadResults.map((res) => res.secure_url);
+      }
+      else if (dto.images) {
+        imageUrls = Array.isArray(dto.images) ? dto.images : [dto.images];
+      }
 
-    // Access payload context injected by your Better-Auth validation passport layer
-    const userContext = { id: req.user.id, role: req.user.role };
-    return this.productsService.create({ ...dto, images: imageUrls }, userContext);
+      const sanitizedDto = {
+        ...dto,
+        price: dto.price ? parseFloat(dto.price) : 0,
+        stock: dto.stock ? parseInt(dto.stock) : 0,
+        images: imageUrls
+      };
+
+      const currentUser = req.user || req.session?.user || req.auth;
+      const userContext = { id: currentUser?.id || currentUser?.sub, role: currentUser?.role };
+
+      return await this.productsService.create({ ...sanitizedDto, images: imageUrls }, userContext);
+    } catch (error: any) {
+      console.error("ERROR IN CREATE PRODUCT:", error?.message || error);
+      throw error;
+    }
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
   @Roles(['vendor', 'admin'])
   @UseInterceptors(FilesInterceptor('images', 5))
   async update(
@@ -83,15 +148,23 @@ export class ProductsController {
     if (files && files.length > 0) {
       const uploadResults = await this.cloudinaryService.uploadMultipleFiles(files);
       imageUrls = uploadResults.map((res) => res.secure_url);
-    } else if (dto.images) {
-      imageUrls = Array.isArray(dto.images) ? dto.images : [dto.images];
     }
 
-    const userContext = { id: req.user.id, role: req.user.role };
-    return this.productsService.update(cleanId, { ...dto, ...(imageUrls && { images: imageUrls }) }, userContext);
+    const existingImages = dto.images_to_keep
+      ? Array.isArray(dto.images_to_keep)
+        ? dto.images_to_keep
+        : [dto.images_to_keep]
+      : [];
+
+    const finalImages = imageUrls ? [...existingImages, ...imageUrls] : existingImages.length > 0 ? existingImages : undefined;
+    const sanitizedDto = { ...dto, price: dto.price ? parseFloat(dto.price) : 0, stock: dto.stock ? parseInt(dto.stock) : 0 };
+
+    const currentUser = req.user || req.session?.user || req.auth;
+    const userContext = { id: currentUser?.id || currentUser?.sub, role: currentUser?.role };
+
+    return this.productsService.update(cleanId, { ...sanitizedDto, ...(finalImages && { images: finalImages }) }, userContext);
   }
 
-  // --- ADMIN REVIEWS: APPROVAL ENDPOINT ---
   @Patch(':id/approve')
   @Roles(['admin'])
   async approve(@Param('id') id: string, @Body('approve') approve: boolean) {
@@ -103,7 +176,8 @@ export class ProductsController {
   @Roles(['vendor', 'admin'])
   async remove(@Param('id') id: string, @Req() req: any) {
     const cleanId = id.replace('local-', '').replace('fake-', '');
-    const userContext = { id: req.user.id, role: req.user.role };
+    const currentUser = req.user || req.session?.user || req.auth;
+    const userContext = { id: currentUser?.id || currentUser?.sub, role: currentUser?.role };
     return this.productsService.remove(cleanId, userContext);
   }
 }

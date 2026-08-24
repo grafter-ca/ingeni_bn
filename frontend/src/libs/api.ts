@@ -1,26 +1,25 @@
 // src/libs/api.ts
 
 const FAKE_BASE = "https://api.escuelajs.co/api/v1";
-const LOCAL_BASE = "http://localhost:8000"; // Adjust if your NestJS uses /api prefix
+const LOCAL_BASE = "http://localhost:8000/api";
 
 async function baseRequest<T>(
   baseUrl: string,
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { credentials? : RequestCredentials} = {}
 ): Promise<T> {
+  const isFormData = options.body instanceof FormData;
   const url = `${baseUrl}${endpoint}`;
 
   const response = await fetch(url, {
     ...options,
-    headers: {
+    headers: isFormData ? {} : {
       "Content-Type": "application/json",
       ...options.headers,
     },
-    credentials:"include",
-    body:
-      options.body && typeof options.body !== "string"
-        ? JSON.stringify(options.body)
-        : options.body,
+    body:isFormData ? options.body : JSON.stringify(options.body),
+    credentials: options.credentials || "omit",
+        // credentials: "include",
   });
 
   if (!response.ok) {

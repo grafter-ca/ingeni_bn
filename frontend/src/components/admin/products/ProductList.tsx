@@ -2,7 +2,7 @@
 import { useProductStore } from "../../../store/productStore";
 import { Trash2, Edit2, Package } from "lucide-react";
 
-export default function ProductList({ onEdit }: { onEdit: (id: string) => void }) {
+export default function ProductList({ onEdit }: { onEdit: (product: any) => void }) {
   const { products, removeProduct } = useProductStore();
 
   if (products.length === 0) {
@@ -62,9 +62,9 @@ export default function ProductList({ onEdit }: { onEdit: (id: string) => void }
             </div>
 
             {/* Actions */}
-            <div className="col-span-2 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="col-span-2 flex justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
               <button 
-                onClick={() => onEdit(product.id)} 
+                onClick={() => onEdit(product)} 
                 className="p-2 hover:bg-blue-500/10 rounded-xl text-gray-400 hover:text-blue-400 transition-all"
               >
                 <Edit2 size={16} />
