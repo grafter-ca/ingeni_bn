@@ -7,13 +7,13 @@ RUN apt-get update && apt-get install -y openssl libssl-dev && rm -rf /var/lib/a
 WORKDIR /app
 
 # 1. Copy package files from the backend folder
-COPY backend/package*.json ./
+COPY package*.json ./
 
 # 2. Install dependencies
 RUN npm ci --network-timeout=100000
 
 # 3. Copy the backend source AND the prisma folder specifically
-COPY backend/ . 
+COPY . . 
 
 # 4. Generate Prisma client (Explicitly pointing to the schema location)
 RUN npx prisma generate --schema ./prisma/schema.prisma
