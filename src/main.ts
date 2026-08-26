@@ -18,7 +18,7 @@ async function bootstrap() {
   }
 
   app.enableCors({
-    origin: ['http://localhost:5173', process.env.FRONTEND_URL || 'http://localhost:3000',"https://ingeri-api.onrender.com", 'http://localhost:3000'],
+    origin: ['http://localhost:5173', process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:3000'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
     allowedHeaders: [
