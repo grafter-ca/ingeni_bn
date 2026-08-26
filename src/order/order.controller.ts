@@ -1,6 +1,7 @@
 import {
   Controller, Get, Post, Body, Param, Patch, Req, Query,
-  ForbiddenException, UseGuards
+  ForbiddenException, UseGuards,
+  NotFoundException
 } from '@nestjs/common';
 import { OrderService } from './order.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
@@ -40,7 +41,7 @@ export class OrderController {
   }
 
 
-  // --- VENDOR DASHBOARD ---
+ // --- VENDOR DASHBOARD ---
   @UseGuards(AuthGuard)
   @Get('vendor/dashboard')
   async getVendorOrders(@Req() req: any) {
@@ -49,6 +50,10 @@ export class OrderController {
     }
 
     const vendorId = await this.orderService.getVendorIdByUserId(req.user.id);
+    if (!vendorId) {
+      throw new NotFoundException('Vendor profile not found for this user account.');
+    }
+
     return this.orderService.getOrdersForVendor(vendorId);
   }
 
