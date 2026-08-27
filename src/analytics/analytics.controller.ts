@@ -3,7 +3,7 @@ import { Controller, Post, Body, Get, Param, UsePipes, ValidationPipe, UseGuards
 import { AnalyticsService } from './analytics.service.js';
 import { TrackClickDto } from '../dto/track-click.dto.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
-import { AllowAnonymous, Roles } from '@thallesp/nestjs-better-auth';
+import { AllowAnonymous, Roles, Session } from '@thallesp/nestjs-better-auth';
 
 @Controller('analytics')
 export class AnalyticsController {
@@ -21,11 +21,14 @@ export class AnalyticsController {
     };
   }
 
-  // Keep admin/vendor protection on stats endpoints
-  @UseGuards(RolesGuard)
+  // Bind Better-Auth session decorator/guard to populate the user/session
   @Roles(['admin', 'vendor'])
+  @UseGuards(RolesGuard)
   @Get('vendor/:vendorId')
-  async getVendorStats(@Param('vendorId') vendorId: string) {
+  async getVendorStats(
+    @Param('vendorId') vendorId: string,
+    @Session() session: any // <-- This forces Better-Auth to parse and attach the session/user
+  ) {
     const stats = vendorId === 'global-store'
       ? await this.analyticsService.getGlobalTrafficStats()
       : await this.analyticsService.getVendorTrafficStats(vendorId);
