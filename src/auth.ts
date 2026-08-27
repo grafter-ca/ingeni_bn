@@ -30,7 +30,7 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       provider: "postgresql",
     }),
 
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8000",
+    baseURL: process.env.BETTER_AUTH_URL || "https://ingeri-api.onrender.com",
 
     trustedOrigins: [
       "http://localhost:3000",
@@ -80,6 +80,13 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
     advanced: {
       disableOriginCheck: true,
       disableCSRFCheck: true,
+      cookieSecure: true,
+      useSecureCookies: true,
+      defaultCookieAttributes: {
+        sameSite: "none",
+        secure: true,
+        httpOnly: true,
+      },
     },
 
     session: {
