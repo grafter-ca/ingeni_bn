@@ -42,20 +42,13 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       additionalFields: {
         phone: { type: "string", required: false },
         country: { type: "string", required: false },
+        image: { type: "string", required: false },
       },
     },
 
     databaseHooks: {
       user: {
         create: {
-          before: async (ctx) => {
-            return {
-              data: {
-                ...ctx,
-              },
-            };
-          },
-
           after: async (user) => {
             if (user.role === "vendor") {
               await prisma.vendor.upsert({
@@ -63,7 +56,7 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
                 update: {},
                 create: {
                   userId: user.id,
-                  storeName: `${user.name}'s Store`,
+                  storeName: `${user.name.split(' ')[0]}'s Store`,
                 },
               });
             }
