@@ -42,7 +42,7 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       additionalFields: {
         phone: { type: "string", required: false },
         country: { type: "string", required: false },
-        image: { type: "string", required: false },
+        image: { type: "string", required: false }, // Stores the final Cloudinary secure_url
       },
     },
 
@@ -98,9 +98,18 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
 
       sendVerificationEmail: async ({ user, url }) => {
         try {
-          const parsedUrl = new URL(url);
-          const token = parsedUrl.searchParams.get("token");
-          const verifyLink = `${process.env.FRONTEND_URL || "http://localhost:3000"}/verify-email?token=${token}`;
+          let verifyLink = url;
+          try {
+            const parsedUrl = new URL(url);
+            const token = parsedUrl.searchParams.get("token");
+            if (token) {
+              const frontendBase = process.env.FRONTEND_URL || "http://localhost:3000";
+              verifyLink = `${frontendBase}/verify-email?token=${token}`;
+            }
+          } catch {
+            const frontendBase = process.env.FRONTEND_URL || "http://localhost:3000";
+            verifyLink = url.startsWith('http') ? url : `${frontendBase}${url}`;
+          }
 
           const mailOptions = {
             from: `"Ingeri Store Support" <${process.env.SMTP_USER || "callebhabyar55@gmail.com"}>`,
