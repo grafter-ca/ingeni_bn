@@ -295,7 +295,7 @@ model Payment {
   amount         Decimal @db.Decimal(10, 2)
 
   status   PaymentStatus @default(INITIALIZED)
-  provider String
+  provider String?
 
   paymentProofUrl String?       @map("payment_proof_url")
 
