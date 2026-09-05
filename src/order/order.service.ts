@@ -24,18 +24,23 @@ export class OrderService {
   // ==========================================
 
 async createOrder(userId: string | undefined, dto: any) {
+
+  if (!dto?.items || !Array.isArray(dto.items) || dto.items.length === 0) {
+      throw new BadRequestException('Order must contain at least one valid item.');
+    }
+
     return this.prisma.order.create({
       data: {
         userId: userId || null,
-        totalAmount: dto.totalAmount || 0,
+        totalAmount:dto.totalAmount ? Number(dto.totalAmount) : 0,
         shippingAddress: dto.shippingAddress || '',
         status: OrderStatus.PENDING,
         paymentStatus: PaymentStatus.INITIALIZED,
         items: {
           create: dto.items.map((item: any) => ({
             productId: item.productId,
-            quantity: item.quantity,
-            price: item.price,
+            quantity: item.quantity || 1,
+            price: item.price || 0,
             vendorId: item.vendorId || null,
           })),
         },
