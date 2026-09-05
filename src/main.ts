@@ -3,7 +3,9 @@ import { AppModule } from './app.module.js';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { rateLimit } from 'express-rate-limit';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import compression from 'compression';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -16,6 +18,9 @@ async function bootstrap() {
     app.set('trust proxy', 1);
     console.log('✅ Trust proxy enabled for Production');
   }
+
+  // 3. Response Compression Middleware
+  app.use(compression());
 
   app.enableCors({
     origin: ['http://localhost:5173', process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:3000'],
@@ -56,6 +61,18 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  // 4. Swagger Configuration
+ const config = new DocumentBuilder()
+    .setTitle('Responsive Optimize API')
+    .setDescription('API documentation for the Responsive Optimize application')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
+  
 
   const PORT = process.env.PORT || 8000;
   await app.listen(PORT, '0.0.0.0', () => {
