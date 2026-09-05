@@ -13,6 +13,10 @@ import { CloudinaryModule } from './libs/cloudinary/cloudinary.module.js';
 import { VendorsModule } from './vendors/vendors.module.js';
 import { SocketModule } from './socket/socket.module.js';
 import { AnalyticsModule } from './analytics/analytics.module.js';
+import { HealthService } from './health/health.service.js';
+import { HealthController } from './health/health.controller.js';
+import { HealthModule } from './health/health.module.js';
+import { EventsModule } from './events/events.module.js';
 
 @Module({
   imports: [
@@ -37,9 +41,11 @@ import { AnalyticsModule } from './analytics/analytics.module.js';
     CategoryModule,
     OrderModule,
     CloudinaryModule,
-    AnalyticsModule
+    AnalyticsModule,
+    HealthModule,
+    EventsModule
   ],
-  controllers: [],
-  providers: [OrderService],
+  controllers: [HealthController],
+  providers: [OrderService, HealthService],
 })
 export class AppModule {}

@@ -3,6 +3,7 @@ import { OrderService } from './order.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EmailService } from '../libs/nodemail/email.service.js';
 import { SocketGateway } from '../socket/socket.gateway.js';
+import { beforeEach, describe, expect, it } from '@jest/globals';
 import { jest } from '@jest/globals';
 
 describe('OrderService', () => {

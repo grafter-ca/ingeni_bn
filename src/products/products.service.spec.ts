@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsService } from './products.service.js';
-import { PrismaService } from '../prisma/prisma.service.js'; // Adjust path if needed
+import { PrismaService } from '../prisma/prisma.service.js'; 
+import { beforeEach, describe, expect, it } from '@jest/globals';
 import { jest } from '@jest/globals';
 
 

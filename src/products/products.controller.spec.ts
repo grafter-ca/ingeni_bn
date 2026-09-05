@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsController } from './products.controller.js';
 import { ProductsService } from './products.service.js';
-import { CloudinaryService } from '../libs/cloudinary/cloudinary.service.js'; // Adjust path if needed
+import { CloudinaryService } from '../libs/cloudinary/cloudinary.service.js';
+import { beforeEach, describe, expect, it } from '@jest/globals';
 import { jest } from '@jest/globals';
 
 
