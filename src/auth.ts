@@ -43,7 +43,7 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       provider: "postgresql",
     }),
 
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8000",
+    baseURL: process.env.BETTER_AUTH_URL || "https://ingeri-api.onrender.com",
 
     trustedOrigins: [
       "http://localhost:3000",
@@ -55,20 +55,13 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       additionalFields: {
         phone: { type: "string", required: false },
         country: { type: "string", required: false },
+        image: { type: "string", required: false }, // Stores the final Cloudinary secure_url
       },
     },
 
     databaseHooks: {
       user: {
         create: {
-          before: async (ctx) => {
-            return {
-              data: {
-                ...ctx,
-              },
-            };
-          },
-
           after: async (user) => {
             if (user.role === "vendor") {
               await prisma.vendor.upsert({
@@ -76,7 +69,7 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
                 update: {},
                 create: {
                   userId: user.id,
-                  storeName: `${user.name}'s Store`,
+                  storeName: `${user.name.split(' ')[0]}'s Store`,
                 },
               });
             }
@@ -93,6 +86,13 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
     advanced: {
       disableOriginCheck: true,
       disableCSRFCheck: true,
+      cookieSecure: true,
+      useSecureCookies: true,
+      defaultCookieAttributes: {
+        sameSite: "none",
+        secure: true,
+        httpOnly: true,
+      },
     },
 
     session: {

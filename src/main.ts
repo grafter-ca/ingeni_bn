@@ -19,11 +19,21 @@ async function bootstrap() {
     console.log('✅ Trust proxy enabled for Production');
   }
 
-  // 3. Response Compression Middleware
-  app.use(compression());
+ const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
 
   app.enableCors({
-    origin: ['http://localhost:5173', process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:3000'],
+    origin: (origin, callback) => {
+    // Allow non-browser tools (Postman, curl, mobile apps) or matching origins
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.onrender.com')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
     allowedHeaders: [
@@ -35,6 +45,7 @@ async function bootstrap() {
       'Set-Cookie',
       'x-better-auth-csrf',
     ],
+    exposedHeaders: ['Set-Cookie'],
   });
 
   app.use(helmet({
