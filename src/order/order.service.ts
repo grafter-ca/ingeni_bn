@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EmailService } from '../libs/nodemail/email.service.js';
 import { SocketGateway } from '../socket/socket.gateway.js';
-import { OrderStatus, PaymentStatus } from '../../generated/prisma/index.js';
+import { CommissionStatus, OrderStatus, PaymentStatus } from '../../generated/prisma/index.js';
 
 @Injectable()
 export class OrderService {
@@ -24,28 +24,112 @@ export class OrderService {
   // ==========================================
 
 async createOrder(userId: string | undefined, dto: any) {
-
-  if (!dto?.items || !Array.isArray(dto.items) || dto.items.length === 0) {
+    if (!dto?.items || !Array.isArray(dto.items) || dto.items.length === 0) {
       throw new BadRequestException('Order must contain at least one valid item.');
     }
 
-    return this.prisma.order.create({
-      data: {
-        userId: userId || null,
-        totalAmount:dto.totalAmount ? Number(dto.totalAmount) : 0,
-        shippingAddress: dto.shippingAddress || '',
-        status: OrderStatus.PENDING,
-        paymentStatus: PaymentStatus.INITIALIZED,
-        items: {
-          create: dto.items.map((item: any) => ({
-            productId: item.productId,
-            quantity: item.quantity || 1,
-            price: item.price || 0,
-            vendorId: item.vendorId || null,
-          })),
+    if (!userId) {
+      throw new BadRequestException('User identification is required to place an order.');
+    }
+
+    // 1. Fetch user profile details for contact info fallbacks
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User account not found.');
+    }
+
+    // 2. Fetch product records to calculate accurate server-side pricing and vendor relationships
+    const productIds = dto.items.map((item: any) => item.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
+
+    const productMap = new Map(products.map((p) => [p.id, p]));
+    const orderNumber = `ISORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const transactionRef = `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+    const vendorRevenueMap = new Map<string, number>();
+
+    const orderItemsData = dto.items.map((item: any) => {
+      const product = productMap.get(item.productId);
+      if (!product) {
+        throw new BadRequestException(`Product with ID ${item.productId} not found.`);
+      }
+
+      const priceAtPurchase = Number(product.price);
+      const quantity = item.quantity || 1;
+      const lineTotal = priceAtPurchase * quantity;
+
+      const commissionRate = 0.10; // 10% platform take
+      const commissionAmount = lineTotal * commissionRate;
+      const vendorEarnings = lineTotal - commissionAmount;
+
+      const vendorId = product.vendorId;
+      const currentVendorTotal = vendorRevenueMap.get(vendorId) || 0;
+      vendorRevenueMap.set(vendorId, currentVendorTotal + lineTotal);
+
+      return {
+        productId: product.id,
+        vendorId: vendorId,
+        quantity,
+        priceAtPurchase,
+        commissionRate,
+        commissionAmount,
+        vendorEarnings,
+        payoutStatus: CommissionStatus.PENDING,
+        fulfillmentStatus: OrderStatus.PENDING,
+      };
+    });
+
+    const fulfillmentsData = Array.from(vendorRevenueMap.entries()).map(([vendorId, revenue]) => ({
+      vendorId,
+      status: OrderStatus.PENDING,
+      revenue,
+    }));
+
+    const totalAmount = dto.totalAmount ? Number(dto.totalAmount) : orderItemsData.reduce((acc, i) => acc + (Number(i.priceAtPurchase) * i.quantity), 0);
+    const taxAmount = dto.taxAmount ? Number(dto.taxAmount) : 0;
+    const shippingFees = dto.shippingFees ? Number(dto.shippingFees) : 0;
+
+    // 3. Execute order creation safely inside a database transaction
+    return await this.prisma.$transaction(async (tx) => {
+      return await tx.order.create({
+        data: {
+          orderNumber,
+          userId,
+          email: dto.email || user.email,
+          phoneNumber: dto.phoneNumber || user.phone || '+250000000000',
+          shippingAddress: dto.shippingAddress || 'Standard Pickup',
+          paymentMethod: dto.paymentMethod || 'MOBILE_MONEY',
+          totalAmount,
+          taxAmount,
+          shippingFees,
+          status: OrderStatus.PENDING,
+          paymentStatus: PaymentStatus.INITIALIZED,
+          items: {
+            create: orderItemsData,
+          },
+          fulfillments: {
+            create: fulfillmentsData,
+          },
+          payment: {
+            create: {
+              userId,
+              transactionRef,
+              amount: totalAmount,
+              status: PaymentStatus.INITIALIZED,
+              provider: dto.provider || dto.paymentMethod || 'MOBILE_MONEY',
+              paymentProofUrl: dto.paymentProofUrl || null,
+            },
+          },
         },
-      } as any,
-      include: { items: { include: { product: true } } },
+        include: {
+          items: { include: { product: true } },
+          fulfillments: true,
+          payment: true,
+          user: true,
+        },
+      });
     });
   }
 
