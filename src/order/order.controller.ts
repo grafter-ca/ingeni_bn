@@ -41,7 +41,7 @@ export class OrderController {
   }
 
 
- // --- VENDOR DASHBOARD ---
+  // --- VENDOR DASHBOARD ---
   @UseGuards(AuthGuard)
   @Get('vendor/dashboard')
   async getVendorOrders(@Req() req: any) {
@@ -83,12 +83,23 @@ export class OrderController {
     return order;
   }
 
+  // --- UPDATE PAYMENT STATUS ---
+  @UseGuards(AuthGuard)
   @Patch(':id/payment-status')
   async updatePaymentStatus(
     @Param('id') id: string,
     @Body('paymentStatus') paymentStatus: PaymentStatus,
   ) {
     return this.orderService.updatePaymentStatus(id, paymentStatus);
+  }
+
+  // Inside your OrderController file
+  @Post(':id/payment-proof')
+  async uploadPaymentProof(
+    @Param('id') id: string,
+    @Body() body: { proofUrl: string; transactionReference?: string }
+  ) {
+    return this.orderService.submitPaymentProof(id, body.proofUrl, body.transactionReference);
   }
 
   // --- UPDATE ORDER STATUS ---

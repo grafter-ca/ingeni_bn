@@ -430,6 +430,7 @@ enum OrderStatus {
 enum PaymentStatus {
   INITIALIZED
   SUCCESS
+  PENDING
   FAILED
   REFUNDED
 }
