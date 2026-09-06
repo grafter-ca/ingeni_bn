@@ -133,49 +133,48 @@ async createOrder(userId: string | undefined, dto: any) {
     });
   }
 
-  async submitPaymentProof(orderId: string, proofUrl: string, transactionReference?: string) {
-    const order = await this.prisma.order.findUnique({
+ async submitPaymentProof(orderId: string, proofUrl: string, transactionReference?: string) {
+  const order = await this.prisma.order.findUnique({
+    where: { id: orderId },
+    include: { payment: true },
+  });
+
+  if (!order) {
+    throw new NotFoundException('Order record not found.');
+  }
+
+  return await this.prisma.$transaction(async (tx) => {
+    // Update order payment status to PENDING while awaiting admin review
+    const updatedOrder = await tx.order.update({
       where: { id: orderId },
-      include: { payment: true },
+      data: {
+        paymentStatus: PaymentStatus.PENDING,
+      },
+      include: {
+        items: { include: { product: true } },
+        payment: true,
+        user: true,
+      },
     });
-
-    if (!order) {
-      throw new NotFoundException('Order record not found.');
-    }
-
-    return await this.prisma.$transaction(async (tx) => {
-      const updatedOrder = await tx.order.update({
-        where: { id: orderId },
+    // Update the payment record with the proof URL and set status to PENDING
+    if (order.payment) {
+      await tx.payment.update({
+        where: { id: order.payment.id },
         data: {
-          paymentStatus: PaymentStatus.SUCCESS, // Automatically mark payment as successful
-          status: OrderStatus.PROCESSING,       // Optionally shift order status forward
-        },
-        include: {
-          items: { include: { product: true } },
-          payment: true,
-          user: true,
+          status: PaymentStatus.PENDING,
+          paymentProofUrl: proofUrl,
+          transactionRef: transactionReference || order.payment.transactionRef,
         },
       });
+    }
 
-      // If a separate Payment relation exists, update its proof URL and status too
-      if (order.payment) {
-        await tx.payment.update({
-          where: { id: order.payment.id },
-          data: {
-            status: PaymentStatus.SUCCESS,
-            paymentProofUrl: proofUrl,
-            transactionRef: transactionReference || order.payment.transactionRef,
-          },
-        });
-      }
-
-      return {
-        success: true,
-        message: 'Payment proof verified and order payment marked as successful.',
-        order: updatedOrder,
-      };
-    });
-  }
+    return {
+      success: true,
+      message: 'Payment proof uploaded successfully. Status is now pending admin verification.',
+      order: updatedOrder,
+    };
+  });
+}
 
   async getOrdersByUser(userId: string) {
     return this.prisma.order.findMany({

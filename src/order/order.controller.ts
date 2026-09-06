@@ -83,6 +83,8 @@ export class OrderController {
     return order;
   }
 
+  // --- UPDATE PAYMENT STATUS ---
+  @UseGuards(AuthGuard)
   @Patch(':id/payment-status')
   async updatePaymentStatus(
     @Param('id') id: string,
