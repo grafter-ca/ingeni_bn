@@ -133,6 +133,50 @@ async createOrder(userId: string | undefined, dto: any) {
     });
   }
 
+  async submitPaymentProof(orderId: string, proofUrl: string, transactionReference?: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { payment: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order record not found.');
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      const updatedOrder = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          paymentStatus: PaymentStatus.SUCCESS, // Automatically mark payment as successful
+          status: OrderStatus.PROCESSING,       // Optionally shift order status forward
+        },
+        include: {
+          items: { include: { product: true } },
+          payment: true,
+          user: true,
+        },
+      });
+
+      // If a separate Payment relation exists, update its proof URL and status too
+      if (order.payment) {
+        await tx.payment.update({
+          where: { id: order.payment.id },
+          data: {
+            status: PaymentStatus.SUCCESS,
+            paymentProofUrl: proofUrl,
+            transactionRef: transactionReference || order.payment.transactionRef,
+          },
+        });
+      }
+
+      return {
+        success: true,
+        message: 'Payment proof verified and order payment marked as successful.',
+        order: updatedOrder,
+      };
+    });
+  }
+
   async getOrdersByUser(userId: string) {
     return this.prisma.order.findMany({
       where: { userId },
