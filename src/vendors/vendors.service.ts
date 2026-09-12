@@ -44,7 +44,7 @@ export class VendorsService {
     return vendor;
   }
 
-  async create(data: { storeName: string; userId: string; description?: string; address?: string; phone?: string }) {
+  async create(data: { storeName: string; userId: string; description?: string; address?: string; phone?: string; user?: { id: string; name: string; email: string } }) {
     const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
     if (!user) {
       throw new NotFoundException('Associated user account not found.');
@@ -64,7 +64,7 @@ export class VendorsService {
         phone: data.phone,
         isActive: true,
       },
-      include: { user: true, products: {select: {id: true, name: true, price: true}} },
+      include: { user: true, products: true },
     });
 
     this.prisma.user.update({
