@@ -19,7 +19,7 @@ export class VendorsService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly socketGateway: SocketGateway
-  ) {}
+  ) { }
 
   async findAll() {
     return this.prisma.vendor.findMany({
@@ -68,11 +68,11 @@ export class VendorsService {
     });
 
     this.prisma.user.update({
-        where: { id: data.userId },
-        data: { role: 'vendor' }, 
-      }),
+      where: { id: data.userId },
+      data: { role: 'vendor' },
+    }),
 
-    this.socketGateway.emitToAll('vendor:approved', { vendorId: vendor.id, role: vendor.user.role, storeName: vendor.storeName, userId: vendor.userId });
+      this.socketGateway.emitToAll('vendor:approved', { vendorId: vendor.id, role: vendor.user.role, storeName: vendor.storeName, userId: vendor.userId });
 
 
     this.pendingRequestsCache = this.pendingRequestsCache.filter(req => req.user.id !== data.userId);
@@ -106,13 +106,13 @@ export class VendorsService {
         throw new BadRequestException('You already have an active vendor profile registered.');
       }
     }
-    
+
     const userId = user.id || `temp-${Date.now()}`;
     const userName = user.name || 'Valued User';
     const userEmail = user.email;
-    
-    const newRequest = { 
-      id: 'req_' + Date.now(), 
+
+    const newRequest = {
+      id: 'req_' + Date.now(),
       user: { id: userId, name: userName, email: userEmail },
       businessDescription,
       submittedAt: new Date().toISOString(),
@@ -127,13 +127,57 @@ export class VendorsService {
     }
 
     this.socketGateway.emitToAll('vendor:request-created', newRequest);
-    
+
     return {
       success: true,
       message: 'Your vendor onboarding request has been successfully submitted.',
     };
   }
-  
+
+  // --- Get financial summary and requests for a specific vendor ---
+  async getVendorFinancials(userId: string) {
+    const vendor = await this.getVendorById(userId);
+    if (!vendor) {
+      throw new NotFoundException('Vendor profile not found.');
+    }
+
+    // Fetch orders belonging to this vendor and explicitly type the array
+    const orders = (await this.findVendorOrders(vendor.id)) as Array<{
+       totalAmount: number | any; // Supports Prisma Decimal or primitive numbers
+       paymentMethod: string;
+       paymentStatus: string;
+      items: Array<{
+        quantity: number;
+        product: {
+          vendorId: string;
+          price: number | any; // Supports Prisma Decimal or primitive numbers
+        };
+      }>;
+    }>;
+
+    const totalRevenue = orders.reduce((sum, order) => {
+      const vendorItems = order.items.filter(item => item.product.vendorId === vendor.id);
+      const orderRevenue = vendorItems.reduce((itemSum, item) => {
+        const itemPrice = Number(item.product.price || 0);
+        return itemSum + (itemPrice * item.quantity);
+      }, 0);
+      return sum + orderRevenue;
+    }, 0);
+
+    // Fetch cashout or admin requests submitted by this vendor
+    const requests = await this.prisma.adminRequest.findMany({
+      where: { vendorId: vendor.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const netBalance = Number(totalRevenue) * 0.9; // Assuming a 10% platform fee deduction
+
+    return {
+      totalRevenue,
+      netBalance,
+      requests,
+    };
+  }
   async findPendingRequests() {
     return this.pendingRequestsCache;
   }
@@ -182,64 +226,64 @@ export class VendorsService {
   }
 
   async findAllAdminRequests() {
-  return this.prisma.adminRequest.findMany({
-    include: { vendor: { select: { storeName: true, phone: true } } },
-    orderBy: { createdAt: 'desc' },
-  });
-}
-
-async updateAdminRequestStatus(requestId: string, status: string, adminNotes?: string) {
-  const request = await this.prisma.adminRequest.findUnique({
-    where: { id: requestId },
-    include: { vendor: { include: { user: true } } },
-  });
-
-  if (!request) {
-    throw new NotFoundException('Admin request record not found.');
+    return this.prisma.adminRequest.findMany({
+      include: { vendor: { select: { storeName: true, phone: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  // Update the request with status and admin notes
-  const updated = await this.prisma.adminRequest.update({
-    where: { id: requestId },
-    data: {
-      status: status.toUpperCase(),
-      adminNotes: adminNotes || null,
-    },
-  });
+  async updateAdminRequestStatus(requestId: string, status: string, adminNotes?: string) {
+    const request = await this.prisma.adminRequest.findUnique({
+      where: { id: requestId },
+      include: { vendor: { include: { user: true } } },
+    });
 
-  // Optional: Send an email notification to the vendor regarding their cashout/query response
-  if (request.vendor?.user?.email) {
-    try {
-      await this.emailService.sendMail(
-        request.vendor.user.email,
-        `Update on your ${request.type} Request - Ingeni Store`,
-        `<h3>Hello ${request.vendor.storeName},</h3>
+    if (!request) {
+      throw new NotFoundException('Admin request record not found.');
+    }
+
+    // Update the request with status and admin notes
+    const updated = await this.prisma.adminRequest.update({
+      where: { id: requestId },
+      data: {
+        status: status.toUpperCase(),
+        adminNotes: adminNotes || null,
+      },
+    });
+
+    // Optional: Send an email notification to the vendor regarding their cashout/query response
+    if (request.vendor?.user?.email) {
+      try {
+        await this.emailService.sendMail(
+          request.vendor.user.email,
+          `Update on your ${request.type} Request - Ingeni Store`,
+          `<h3>Hello ${request.vendor.storeName},</h3>
          <p>Your request regarding <strong>"${request.message}"</strong> has been updated to: <strong>${status.toUpperCase()}</strong>.</p>
          ${adminNotes ? `<p><strong>Admin Note:</strong> ${adminNotes}</p>` : ''}`
-      );
-    } catch (e) {
-      console.error('Failed to email vendor on request status change:', e);
+        );
+      } catch (e) {
+        console.error('Failed to email vendor on request status change:', e);
+      }
     }
+
+    return updated;
   }
 
-  return updated;
-}
+  async deleteAdminRequest(id: string) {
+    const request = await this.prisma.adminRequest.findUnique({
+      where: { id },
+    });
 
-async deleteAdminRequest(id: string) {
-  const request = await this.prisma.adminRequest.findUnique({
-    where: { id },
-  });
+    if (!request) {
+      throw new NotFoundException('Admin request record not found.');
+    }
 
-  if (!request) {
-    throw new NotFoundException('Admin request record not found.');
+    return this.prisma.adminRequest.delete({
+      where: { id },
+    });
   }
 
-  return this.prisma.adminRequest.delete({
-    where: { id },
-  });
-}
-
-  // --- Fetch orders belonging to a specific vendor ---
+ // --- Fetch orders belonging to a specific vendor ---
   async findVendorOrders(vendorId?: string) {
     const resolvedVendor = vendorId ? await this.getVendorById(vendorId) : null;
     const targetVendorId = resolvedVendor?.id;
@@ -249,11 +293,13 @@ async deleteAdminRequest(id: string) {
         where: {
           items: {
             some: {
-              product: {
-                vendorId: targetVendorId,
-              },
+              product: { vendorId: targetVendorId },
             },
           },
+          OR: [
+            { paymentMethod: 'MOBILE_MONEY' },
+            { paymentMethod: 'CASH_ON_DELIVERY', paymentStatus: 'SUCCESS' },
+          ],
         },
       }),
       include: {
@@ -264,7 +310,6 @@ async deleteAdminRequest(id: string) {
       orderBy: { createdAt: 'desc' },
     }).catch(() => []);
   }
-
   // --- Update individual order statuses with Prisma Enum Casting ---
   async updateOrderStatus(orderId: string, status: string) {
     return this.prisma.order.update({
@@ -277,7 +322,6 @@ async deleteAdminRequest(id: string) {
     let vendor = await this.getVendorById(userId);
     // If no vendor exists for this user, auto-provision the vendor profile
     if (!vendor) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
       vendor = await this.prisma.vendor.create({
         data: {
           userId: userId,
@@ -370,12 +414,12 @@ async deleteAdminRequest(id: string) {
     const [revenueAgg, activeOrdersCount, productCount] = await Promise.all([
       this.prisma.order.aggregate({
         _sum: { totalAmount: true },
-      }).catch(() => ({ _sum: { totalAmount: 0 } })), 
-      
+      }).catch(() => ({ _sum: { totalAmount: 0 } })),
+
       this.prisma.order.count({
         where: { status: { not: OrderStatus.DELIVERED } },
       }).catch(() => 0),
-      
+
       this.prisma.product.count().catch(() => 0),
     ]);
 

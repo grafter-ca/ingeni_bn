@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EmailService } from '../libs/nodemail/email.service.js';
 import { SocketGateway } from '../socket/socket.gateway.js';
@@ -372,6 +372,47 @@ async createOrder(userId: string | undefined, dto: any) {
       },
     });
   }
+
+ async markCashOrderAsPaid(orderId: string, vendorId: string ) {
+  const order = await this.prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      items: {
+        include: { product: true },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new NotFoundException('Order not found.');
+  }
+
+  // Ensure the order contains products belonging to this vendor
+  const belongsToVendor = order.items.some(
+    item => item.product.vendorId === vendorId
+  );
+
+  if (!belongsToVendor) {
+    throw new ForbiddenException('You are not authorized to update this order.');
+  }
+
+  if (order.paymentMethod !== 'CASH_ON_DELIVERY') {
+    throw new BadRequestException('This order is not a Cash on Delivery order.');
+  }
+
+  // Update order payment status
+  const updatedOrder = await this.prisma.order.update({
+    where: { id: orderId },
+    data: { paymentStatus: 'SUCCESS' },
+  });
+
+  return {
+    success: true,
+    message: 'Cash payment successfully registered and added to financial ledger.',
+    order: updatedOrder,
+  };
+}
+
 
   async remove(id: string) {
     return this.prisma.vendor.delete({ where: { id } });

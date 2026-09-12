@@ -93,6 +93,21 @@ export class OrderController {
     return this.orderService.updatePaymentStatus(id, paymentStatus);
   }
 
+  @Patch(':id/mark-cash-paid')
+  @UseGuards(AuthGuard)
+  async markCashOrderAsPaid(
+    @Param('id') orderId: string,
+    @Req() req: any
+  ) {
+    const vendorId = await this.orderService.getVendorIdByUserId(req.user.id);
+
+    if (!vendorId) {
+      throw new NotFoundException('Vendor profile not found for this user account.');
+    }
+
+    return this.orderService.markCashOrderAsPaid(clean(orderId), vendorId);
+  }
+
   // Inside your OrderController file
   @Post(':id/payment-proof')
   async uploadPaymentProof(
