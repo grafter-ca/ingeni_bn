@@ -91,6 +91,13 @@ export class VendorsController {
     return this.vendorsService.getVendorById(id);
   }
 
+  // get vendor financials by user id
+  @Get(':id/financials')
+  @UseGuards(RolesGuard)
+  async getVendorFinancials(@Param('id') id: string) {
+    return this.vendorsService.getVendorFinancials(id);
+  }
+
   @Patch(':id/toggle-status')
   @UseGuards(RolesGuard)
   @Roles(['admin'])
