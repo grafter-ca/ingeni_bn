@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { EmailService } from '../libs/nodemail/email.service.js';
 import { SocketGateway } from '../socket/socket.gateway.js';
 import { OrderStatus } from '../../generated/prisma/index.js';
+import { role } from 'better-auth/plugins';
 
 @Injectable()
 export class VendorsService {
@@ -63,8 +64,16 @@ export class VendorsService {
         phone: data.phone,
         isActive: true,
       },
-      include: { user: true },
+      include: { user: true, products: {select: {id: true, name: true, price: true}} },
     });
+
+    this.prisma.user.update({
+        where: { id: data.userId },
+        data: { role: 'vendor' }, 
+      }),
+
+    this.socketGateway.emitToAll('vendor:approved', { vendorId: vendor.id, role: vendor.user.role, storeName: vendor.storeName, userId: vendor.userId });
+
 
     this.pendingRequestsCache = this.pendingRequestsCache.filter(req => req.user.id !== data.userId);
 
