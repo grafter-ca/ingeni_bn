@@ -4,7 +4,6 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { EmailService } from '../libs/nodemail/email.service.js';
 import { SocketGateway } from '../socket/socket.gateway.js';
 import { OrderStatus } from '../../generated/prisma/index.js';
-import { role } from 'better-auth/plugins';
 
 @Injectable()
 export class VendorsService {
@@ -26,7 +25,6 @@ export class VendorsService {
       include: { user: { select: { email: true, name: true, id: true } } },
     });
   }
-
   // --- Robust resolution of vendor by userId or direct vendorId ---
   async getVendorById(identifier: string) {
     let vendor = await this.prisma.vendor.findUnique({
@@ -43,7 +41,6 @@ export class VendorsService {
 
     return vendor;
   }
-
   async create(data: { storeName: string; userId: string; description?: string; address?: string; phone?: string; user?: { id: string; name: string; email: string } }) {
     const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
     if (!user) {
@@ -90,7 +87,6 @@ export class VendorsService {
 
     return vendor;
   }
-
   async requestOnboarding(user: { id?: string; name?: string; email?: string }, businessDescription: string) {
     if (!businessDescription || businessDescription.trim().length < 10) {
       throw new BadRequestException('Please provide a detailed business description (minimum 10 characters).');
@@ -133,14 +129,12 @@ export class VendorsService {
       message: 'Your vendor onboarding request has been successfully submitted.',
     };
   }
-
   // --- Get financial summary and requests for a specific vendor ---
   async getVendorFinancials(userId: string) {
     const vendor = await this.getVendorById(userId);
     if (!vendor) {
       throw new NotFoundException('Vendor profile not found.');
     }
-
     // Fetch orders belonging to this vendor and explicitly type the array
     const orders = (await this.findVendorOrders(vendor.id)) as Array<{
        totalAmount: number | any; // Supports Prisma Decimal or primitive numbers
@@ -181,14 +175,49 @@ export class VendorsService {
   async findPendingRequests() {
     return this.pendingRequestsCache;
   }
-
   async rejectVendorRequest(requestId: string) {
     this.pendingRequestsCache = this.pendingRequestsCache.filter(req => req.id !== requestId);
     return { success: true };
   }
 
   async approveVendorRequest(data: { userId: string; storeName: string; description: string; address: string; phone: string }) {
-    return this.create(data);
+
+    // we will need to send email to that created vendor
+    const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
+    if (!user) {
+      throw new NotFoundException('Associated user account not found.');
+    }
+
+    // Check if a vendor profile already exists for this user
+    const existingVendor = await this.prisma.vendor.findUnique({ where: { userId: data.userId } });
+    if (existingVendor) {
+      throw new BadRequestException('A vendor profile already exists for this user account.');
+    }  
+
+    
+    // send email to the vendor notifying them of approval and next steps
+    if (user.email) {
+      try {
+        await this.emailService.sendMail(
+          user.email,
+          'Your Vendor Profile Has Been Approved',
+          `<h3>Hello ${user.name},</h3>
+           <p>Congratulations! Your vendor profile for <strong>${data.storeName}</strong> has been approved.</p>
+           <p>You can now start listing your products and serving your customers.</p>`
+        );
+      } catch (e) {
+        console.error('Failed to email vendor on profile approval:', e);
+      }
+    }
+    // Create the vendor profile and associate it with the user
+    return this.create({
+      storeName: data.storeName,
+      description: data.description,
+      address: data.address,
+      phone: data.phone,
+      userId: data.userId
+    });
+
   }
 
   async toggleVendorStatus(id: string, currentStatus: boolean) {
