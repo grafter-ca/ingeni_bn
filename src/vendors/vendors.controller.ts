@@ -39,7 +39,6 @@ export class VendorsController {
   }
 
   // --- ADMIN ENDPOINTS FOR ONBOARDING QUEUE ---
-
   @Get('requests')
   @UseGuards(RolesGuard)
   @Roles(['admin'])
@@ -83,6 +82,13 @@ export class VendorsController {
   @Roles(['admin'])
   async update(@Param('id') id: string, @Body() dto: any) {
     return this.vendorsService.update(id, dto);
+  }
+
+  // get vendor by id
+  @Get(':id')
+  @UseGuards(RolesGuard)
+  async getVendorById(@Param('id') id: string) {
+    return this.vendorsService.getVendorById(id);
   }
 
   @Patch(':id/toggle-status')

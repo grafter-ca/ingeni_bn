@@ -25,7 +25,6 @@ export class VendorsService {
       include: { user: { select: { email: true, name: true, id: true } } },
     });
   }
-  // --- Robust resolution of vendor by userId or direct vendorId ---
   async getVendorById(identifier: string) {
     let vendor = await this.prisma.vendor.findUnique({
       where: { id: identifier },
@@ -129,7 +128,6 @@ export class VendorsService {
       message: 'Your vendor onboarding request has been successfully submitted.',
     };
   }
-  // --- Get financial summary and requests for a specific vendor ---
   async getVendorFinancials(userId: string) {
     const vendor = await this.getVendorById(userId);
     if (!vendor) {
@@ -179,7 +177,6 @@ export class VendorsService {
     this.pendingRequestsCache = this.pendingRequestsCache.filter(req => req.id !== requestId);
     return { success: true };
   }
-
   async approveVendorRequest(data: { userId: string; storeName: string; description: string; address: string; phone: string }) {
 
     // we will need to send email to that created vendor
@@ -219,7 +216,6 @@ export class VendorsService {
     });
 
   }
-
   async toggleVendorStatus(id: string, currentStatus: boolean) {
     const newStatus = !currentStatus;
     const vendor = await this.prisma.vendor.update({
@@ -230,7 +226,6 @@ export class VendorsService {
 
     return vendor;
   }
-
   async update(id: string, data: any) {
     const { storeName, description, address, phone, isActive } = data;
     return this.prisma.vendor.update({
@@ -244,23 +239,19 @@ export class VendorsService {
       },
     });
   }
-
   async remove(id: string) {
     return this.prisma.vendor.delete({ where: { id } });
   }
-
   async getVendorMetrics(id: string) {
     const count = await this.prisma.product.count({ where: { vendorId: id } });
     return { productCount: count };
   }
-
   async findAllAdminRequests() {
     return this.prisma.adminRequest.findMany({
       include: { vendor: { select: { storeName: true, phone: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
-
   async updateAdminRequestStatus(requestId: string, status: string, adminNotes?: string) {
     const request = await this.prisma.adminRequest.findUnique({
       where: { id: requestId },
