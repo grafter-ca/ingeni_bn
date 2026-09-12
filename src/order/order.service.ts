@@ -474,6 +474,25 @@ async createOrder(userId: string | undefined, dto: any) {
       throw new NotFoundException('Admin request record not found.');
     }
 
+    // extruct vendor info for email notification if needed
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: request.vendorId },
+      include: { user: true },
+    });
+
+    if (vendor?.user?.email) {
+      try {
+        await this.emailService.sendMail(
+          vendor.user.email,
+          `Your ${request.type} Request has been Deleted - Ingeni Store`,
+          `<h3>Hello ${vendor.storeName},</h3>
+           <p>Your request regarding <strong>"${request.message}"</strong> has been deleted by the administration team.</p>`
+        );
+      } catch (e) {
+        console.error('Failed to email vendor on request deletion:', e);
+      }
+    }
+
     return this.prisma.adminRequest.delete({
       where: { id },
     });
