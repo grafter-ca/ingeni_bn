@@ -60,7 +60,7 @@ async createOrder(userId: string | undefined, dto: any) {
       const quantity = item.quantity || 1;
       const lineTotal = priceAtPurchase * quantity;
 
-      const commissionRate = 0.10; // 10% platform take
+      const commissionRate = 0.08; // 8% platform take
       const commissionAmount = lineTotal * commissionRate;
       const vendorEarnings = lineTotal - commissionAmount;
 
@@ -515,7 +515,7 @@ async createOrder(userId: string | undefined, dto: any) {
       include: {
         items: {
           where: targetVendorId ? { vendorId: targetVendorId } : undefined,
-          include: { product: true },
+          include: { product: true ,vendor: true},
         },
       },
       orderBy: { createdAt: 'desc' },

@@ -84,14 +84,18 @@ export class OrderController {
   }
 
   // --- UPDATE PAYMENT STATUS ---
-  @UseGuards(AuthGuard)
-  @Patch(':id/payment-status')
-  async updatePaymentStatus(
-    @Param('id') id: string,
-    @Body('paymentStatus') paymentStatus: PaymentStatus,
-  ) {
-    return this.orderService.updatePaymentStatus(id, paymentStatus);
+@UseGuards(AuthGuard)
+@Patch(':id/payment-status')
+async updatePaymentStatus(
+  @Param('id') id: string,
+  @Body('paymentStatus') paymentStatus: PaymentStatus,
+  @Req() req: any
+) {
+  if (req.user.role !== UserRole.admin) {
+    throw new ForbiddenException('Only administrators can directly mutate payment statuses.');
   }
+  return this.orderService.updatePaymentStatus(clean(id), paymentStatus);
+}
 
   @Patch(':id/mark-cash-paid')
   @UseGuards(AuthGuard)
@@ -109,6 +113,7 @@ export class OrderController {
   }
 
   // Inside your OrderController file
+  @UseGuards(AuthGuard)
   @Post(':id/payment-proof')
   async uploadPaymentProof(
     @Param('id') id: string,
