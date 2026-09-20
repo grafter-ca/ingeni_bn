@@ -226,19 +226,30 @@ export class VendorsService {
 
     return vendor;
   }
-  async update(id: string, data: any) {
-    const { storeName, description, address, phone, isActive } = data;
-    return this.prisma.vendor.update({
-      where: { id },
-      data: {
-        storeName,
-        description,
-        address,
-        phone,
-        ...(isActive !== undefined && { isActive }),
-      },
-    });
+ async update(identifier: string, data: any) {
+  const { storeName, description, address, phone, isActive } = data;
+  
+  // Resolve whether the identifier is a vendor ID or a user ID
+  let vendor = await this.prisma.vendor.findUnique({ where: { id: identifier } });
+  if (!vendor) {
+    vendor = await this.prisma.vendor.findUnique({ where: { userId: identifier } });
   }
+
+  if (!vendor) {
+    throw new NotFoundException('Vendor profile not found for update.');
+  }
+
+  return this.prisma.vendor.update({
+    where: { id: vendor.id },
+    data: {
+      storeName,
+      description,
+      address,
+      phone,
+      ...(isActive !== undefined && { isActive }),
+    },
+  });
+}
   async remove(id: string) {
     return this.prisma.vendor.delete({ where: { id } });
   }
