@@ -79,7 +79,7 @@ export class VendorsController {
   @Patch(':id')
   @Put(':id')
   @UseGuards(RolesGuard)
-  @Roles(['admin'])
+  @Roles(['admin','vendor'])
   async update(@Param('id') id: string, @Body() dto: any) {
     return this.vendorsService.update(id, dto);
   }

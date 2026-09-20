@@ -117,7 +117,7 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
         const token = parsedUrl.searchParams.get("token");
 
         // Map the link directly to your frontend verify-email page route carrying the token
-        const frontendBase = process.env.FRONTEND_URL || "http://localhost:3000";
+        const frontendBase = process.env.FRONTEND_URL || "http://localhost:5173";
         const frontendVerificationLink = token 
           ? `${frontendBase}/verify-email?token=${token}` 
           : url;
