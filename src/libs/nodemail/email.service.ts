@@ -1,5 +1,6 @@
+// src/libs/nodemail/email.service.ts
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import nodemailer from 'nodemailer';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class EmailService {
@@ -11,20 +12,21 @@ export class EmailService {
       port: Number(process.env.SMTP_PORT || 465),
       secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
       auth: {
-        user: process.env.SMTP_USER || 'callebhabyar55@gmail.com',
-        pass: process.env.SMTP_PASS || 'fevw ozes scqg vxpn',
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
       },
       tls: {
         rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED === 'true',
       },
     });
   }
+
   /**
    * Core execution method to dispatch raw mail payloads
    */
   async sendMail(to: string, subject: string, htmlContent: string) {
     const mailOptions = {
-      from: `"Ingeri Store Support" <${process.env.SMTP_USER || 'callebhabyar55@gmail.com'}>`,
+      from: `"Ingeri Store Support" <${process.env.SMTP_USER}>`,
       to,
       subject,
       html: htmlContent,
@@ -37,6 +39,7 @@ export class EmailService {
       throw new InternalServerErrorException(`Email pipeline breakdown: ${error.message}`);
     }
   }
+
   // --- EMAIL TEMPLATE: PRODUCT CREATION CONFIRMATION ---
   async sendProductCreationAlert(vendorEmail: string, vendorName: string, productTitle: string) {
     const subject = `🚀 Product Published Successfully: ${productTitle}`;
@@ -53,6 +56,7 @@ export class EmailService {
     `;
     return this.sendMail(vendorEmail, subject, html);
   }
+
   // --- EMAIL TEMPLATE: PRODUCT MODIFICATION NOTIFICATION ---
   async sendProductUpdateAlert(vendorEmail: string, vendorName: string, productTitle: string) {
     const subject = `🔄 Listing Profile Modified: ${productTitle}`;
@@ -70,10 +74,11 @@ export class EmailService {
     `;
     return this.sendMail(vendorEmail, subject, html);
   }
+
   // --- EMAIL TEMPLATE: VENDOR SECURITY INCIDENT DESK ---
   async sendSecurityIssueRequest(vendorEmail: string, storeName: string, issueDetails: string) {
     // Dispatches a highly visible critical alert to your primary admin mailbox
-    const systemAdminEmail = process.env.SMTP_USER || 'callebhabyar55@gmail.com';
+    const systemAdminEmail = process.env.SMTP_USER as string;
     const subject = `⚠️ CRITICAL: Security Issue Flagged by Vendor [${storeName}]`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 2px solid #DC2626; padding: 20px; border-radius: 8px;">
@@ -103,24 +108,25 @@ export class EmailService {
     `;
     return this.sendMail(systemAdminEmail, subject, html);
   }
-  // Add this to your EmailService class
-async sendVendorOnboardingRequest(userName: string, userEmail: string, businessDescription: string) {
-  const adminEmail = process.env.SMTP_USER || 'callebhabyar55@gmail.com';
-  const subject = `🆕 New Vendor Onboarding Request: ${userName}`;
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #d1d5db; border-radius: 8px;">
-      <h2 style="color: #059669;">New Vendor Application</h2>
-      <p>A user has requested to join as a vendor on the Ingeri Store platform.</p>
-      <div style="background: #f9fafb; padding: 15px; border-radius: 6px;">
-        <p><strong>Name:</strong> ${userName}</p>
-        <p><strong>Email:</strong> ${userEmail}</p>
-        <p><strong>Business Context:</strong><br>${businessDescription}</p>
+
+  // --- EMAIL TEMPLATE: VENDOR ONBOARDING REQUEST ---
+  async sendVendorOnboardingRequest(userName: string, userEmail: string, businessDescription: string) {
+    const adminEmail = process.env.SMTP_USER as string;
+    const subject = `🆕 New Vendor Onboarding Request: ${userName}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #d1d5db; border-radius: 8px;">
+        <h2 style="color: #059669;">New Vendor Application</h2>
+        <p>A user has requested to join as a vendor on the Ingeri Store platform.</p>
+        <div style="background: #f9fafb; padding: 15px; border-radius: 6px;">
+          <p><strong>Name:</strong> ${userName}</p>
+          <p><strong>Email:</strong> ${userEmail}</p>
+          <p><strong>Business Context:</strong><br>${businessDescription}</p>
+        </div>
+        <p style="margin-top: 20px;">
+          <a href="${process.env.ADMIN_DASHBOARD_URL || 'http://localhost:5173/admin/vendors'}" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Review in Admin Panel</a>
+        </p>
       </div>
-      <p style="margin-top: 20px;">
-        <a href="https://your-admin-dashboard-url.com" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Review in Admin Panel</a>
-      </p>
-    </div>
-  `;
-  return this.sendMail(adminEmail, subject, html);
-}
+    `;
+    return this.sendMail(adminEmail, subject, html);
+  }
 }

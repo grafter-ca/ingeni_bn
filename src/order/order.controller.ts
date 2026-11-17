@@ -45,7 +45,7 @@ export class OrderController {
   @UseGuards(AuthGuard)
   @Get('vendor/dashboard')
   async getVendorOrders(@Req() req: any) {
-    if (req.user.role !== UserRole.vendor) {
+    if (![UserRole.vendor, UserRole.admin].includes(req.user.role)) {
       throw new ForbiddenException('Access limited to active marketplace vendors');
     }
 
@@ -83,19 +83,34 @@ export class OrderController {
     return order;
   }
 
-  // --- UPDATE PAYMENT STATUS ---
-@UseGuards(AuthGuard)
-@Patch(':id/payment-status')
-async updatePaymentStatus(
-  @Param('id') id: string,
-  @Body('paymentStatus') paymentStatus: PaymentStatus,
-  @Req() req: any
-) {
-  if (req.user.role !== UserRole.admin) {
-    throw new ForbiddenException('Only administrators can directly mutate payment statuses.');
+// --- UPDATE PAYMENT STATUS ---
+  @UseGuards(AuthGuard)
+  @Patch(':id/payment-status')
+  async updatePaymentStatus(
+    @Param('id') id: string,
+    @Body('paymentStatus') paymentStatus: PaymentStatus,
+    @Req() req: any
+  ) {
+    // Allow both admins and vendors to update payment status
+    if (![UserRole.admin, UserRole.vendor].includes(req.user.role)) {
+      throw new ForbiddenException('Only administrators and merchants can mutate payment statuses.');
+    }
+
+    // Optional safety check for vendors: verify the vendor owns items in this order
+    if (req.user.role === UserRole.vendor) {
+      const vendorId = await this.orderService.getVendorIdByUserId(req.user.id);
+      if (!vendorId) {
+        throw new NotFoundException('Vendor profile not found for this user account.');
+      }
+      const order = await this.orderService.getOne(clean(id));
+      const hasVendorItem = order.items?.some((item: any) => item.vendorId === vendorId);
+      if (!hasVendorItem) {
+        throw new ForbiddenException('You can only update payment status for orders containing your store products.');
+      }
+    }
+
+    return this.orderService.updatePaymentStatus(clean(id), paymentStatus);
   }
-  return this.orderService.updatePaymentStatus(clean(id), paymentStatus);
-}
 
   @Patch(':id/mark-cash-paid')
   @UseGuards(AuthGuard)

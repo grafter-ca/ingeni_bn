@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EmailService } from '../libs/nodemail/email.service.js';
 import { SocketGateway } from '../socket/socket.gateway.js';
-import { CommissionStatus, OrderStatus, PaymentStatus } from '../../generated/prisma/index.js';
+import { CommissionStatus, OrderStatus, PaymentStatus,AdminRequestStatus } from '../../generated/prisma/client.js';
 
 @Injectable()
 export class OrderService {
@@ -66,7 +66,7 @@ async createOrder(userId: string | undefined, dto: any) {
 
       const vendorId = product.vendorId;
       const currentVendorTotal = vendorRevenueMap.get(vendorId) || 0;
-      vendorRevenueMap.set(vendorId, currentVendorTotal + lineTotal);
+      vendorRevenueMap.set(vendorId, currentVendorTotal + vendorEarnings);
 
       return {
         productId: product.id,
@@ -87,7 +87,9 @@ async createOrder(userId: string | undefined, dto: any) {
       revenue,
     }));
 
-    const totalAmount = dto.totalAmount ? Number(dto.totalAmount) : orderItemsData.reduce((acc, i) => acc + (Number(i.priceAtPurchase) * i.quantity), 0);
+    const totalAmount = dto.totalAmount 
+      ? Number(dto.totalAmount) 
+      : orderItemsData.reduce((acc, i) => acc + (Number(i.priceAtPurchase) * i.quantity), 0);
     const taxAmount = dto.taxAmount ? Number(dto.taxAmount) : 0;
     const shippingFees = dto.shippingFees ? Number(dto.shippingFees) : 0;
 
@@ -220,11 +222,29 @@ async createOrder(userId: string | undefined, dto: any) {
     });
   }
 
-  async updateStatus(id: string, status: OrderStatus) {
-    return this.prisma.order.update({
-      where: { id },
+async updateStatus(orderId: string, status: OrderStatus) {
+    // 1. Update the parent Order status
+    const updatedOrder = await this.prisma.order.update({
+      where: { id: orderId },
       data: { status },
+      include: { items: true, payment: true },
     });
+
+    // 2. Synchronize all associated OrderItem fulfillment statuses
+    await this.prisma.orderItem.updateMany({
+      where: { orderId: orderId },
+      data: { fulfillmentStatus: status },
+    });
+
+    // 3. Optional: Create an order history record for logging
+    await this.prisma.orderHistory.create({
+      data: {
+        orderId: orderId,
+        status: status,
+      },
+    });
+
+    return updatedOrder;
   }
 
   // ==========================================
@@ -443,7 +463,7 @@ async createOrder(userId: string | undefined, dto: any) {
     const updated = await this.prisma.adminRequest.update({
       where: { id: requestId },
       data: {
-        status: status.toUpperCase(),
+        status: status.toUpperCase() as AdminRequestStatus,
         adminNotes: adminNotes || null,
       },
     });

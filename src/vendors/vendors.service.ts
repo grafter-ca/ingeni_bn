@@ -3,7 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EmailService } from '../libs/nodemail/email.service.js';
 import { SocketGateway } from '../socket/socket.gateway.js';
-import { OrderStatus } from '../../generated/prisma/index.js';
+import { OrderStatus, AdminRequestStatus } from '../../generated/prisma/client.js';
 
 @Injectable()
 export class VendorsService {
@@ -133,28 +133,50 @@ export class VendorsService {
     if (!vendor) {
       throw new NotFoundException('Vendor profile not found.');
     }
-    // Fetch orders belonging to this vendor and explicitly type the array
+
+    // Fetch orders belonging to this vendor
     const orders = (await this.findVendorOrders(vendor.id)) as Array<{
-       totalAmount: number | any; // Supports Prisma Decimal or primitive numbers
-       paymentMethod: string;
-       paymentStatus: string;
+      totalAmount: number | any;
+      paymentMethod: string;
+      paymentStatus: string;
+      status: string;
       items: Array<{
         quantity: number;
+        vendorId?: string;
+        vendorEarnings?: number | any;
+        priceAtPurchase?: number | any;
         product: {
           vendorId: string;
-          price: number | any; // Supports Prisma Decimal or primitive numbers
+          price: number | any;
         };
       }>;
     }>;
 
-    const totalRevenue = orders.reduce((sum, order) => {
-      const vendorItems = order.items.filter(item => item.product.vendorId === vendor.id);
-      const orderRevenue = vendorItems.reduce((itemSum, item) => {
-        const itemPrice = Number(item.product.price || 0);
-        return itemSum + (itemPrice * item.quantity);
-      }, 0);
-      return sum + orderRevenue;
-    }, 0);
+    let totalRevenue = 0;
+    let rawNetEarnings = 0;
+
+    orders.forEach((order) => {
+      const isPaid = order.paymentStatus === 'SUCCESS';
+      const isDelivered = order.status === 'DELIVERED';
+
+      const vendorItems = order.items.filter(item => (item.vendorId || item.product.vendorId) === vendor.id);
+
+      vendorItems.forEach(item => {
+        const itemPrice = Number(item.priceAtPurchase || item.product.price || 0);
+        const qty = Number(item.quantity || 1);
+        const lineTotal = itemPrice * qty;
+
+        totalRevenue += lineTotal;
+
+        // Only add to net earnings if the order is successfully paid and delivered (Ready)
+        if (isPaid && isDelivered) {
+          const storedEarnings = Number(item.vendorEarnings || 0);
+          // Fallback calculation using 8% fee if storedEarnings isn't populated
+          const computedEarnings = storedEarnings > 0 ? storedEarnings : lineTotal * (1 - 0.08);
+          rawNetEarnings += computedEarnings;
+        }
+      });
+    });
 
     // Fetch cashout or admin requests submitted by this vendor
     const requests = await this.prisma.adminRequest.findMany({
@@ -162,7 +184,12 @@ export class VendorsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const netBalance = Number(totalRevenue) * 0.9; // Assuming a 10% platform fee deduction
+    // Calculate total approved cashouts to subtract from available net balance
+    const totalApprovedCashouts = requests
+      .filter((req) => req.type === 'CASHOUT' && req.status === 'APPROVED')
+      .reduce((sum, req) => sum + Number(req.amount || 0), 0);
+
+    const netBalance = Math.max(0, rawNetEarnings - totalApprovedCashouts);
 
     return {
       totalRevenue,
@@ -189,9 +216,9 @@ export class VendorsService {
     const existingVendor = await this.prisma.vendor.findUnique({ where: { userId: data.userId } });
     if (existingVendor) {
       throw new BadRequestException('A vendor profile already exists for this user account.');
-    }  
+    }
 
-    
+
     // send email to the vendor notifying them of approval and next steps
     if (user.email) {
       try {
@@ -226,30 +253,30 @@ export class VendorsService {
 
     return vendor;
   }
- async update(identifier: string, data: any) {
-  const { storeName, description, address, phone, isActive } = data;
-  
-  // Resolve whether the identifier is a vendor ID or a user ID
-  let vendor = await this.prisma.vendor.findUnique({ where: { id: identifier } });
-  if (!vendor) {
-    vendor = await this.prisma.vendor.findUnique({ where: { userId: identifier } });
-  }
+  async update(identifier: string, data: any) {
+    const { storeName, description, address, phone, isActive } = data;
 
-  if (!vendor) {
-    throw new NotFoundException('Vendor profile not found for update.');
-  }
+    // Resolve whether the identifier is a vendor ID or a user ID
+    let vendor = await this.prisma.vendor.findUnique({ where: { id: identifier } });
+    if (!vendor) {
+      vendor = await this.prisma.vendor.findUnique({ where: { userId: identifier } });
+    }
 
-  return this.prisma.vendor.update({
-    where: { id: vendor.id },
-    data: {
-      storeName,
-      description,
-      address,
-      phone,
-      ...(isActive !== undefined && { isActive }),
-    },
-  });
-}
+    if (!vendor) {
+      throw new NotFoundException('Vendor profile not found for update.');
+    }
+
+    return this.prisma.vendor.update({
+      where: { id: vendor.id },
+      data: {
+        storeName,
+        description,
+        address,
+        phone,
+        ...(isActive !== undefined && { isActive }),
+      },
+    });
+  }
   async remove(id: string) {
     return this.prisma.vendor.delete({ where: { id } });
   }
@@ -263,7 +290,11 @@ export class VendorsService {
       orderBy: { createdAt: 'desc' },
     });
   }
-  async updateAdminRequestStatus(requestId: string, status: string, adminNotes?: string) {
+async updateAdminRequestStatus(
+    requestId: string,
+    status: string,
+    adminNotes?: string,
+  ) {
     const request = await this.prisma.adminRequest.findUnique({
       where: { id: requestId },
       include: { vendor: { include: { user: true } } },
@@ -273,24 +304,47 @@ export class VendorsService {
       throw new NotFoundException('Admin request record not found.');
     }
 
-    // Update the request with status and admin notes
+    const rawStatus = (status || 'PENDING').toUpperCase();
+    let normalizedStatus: AdminRequestStatus;
+
+    switch (rawStatus) {
+      case 'APPROVED':
+        normalizedStatus = AdminRequestStatus.APPROVED;
+        break;
+      case 'REJECTED':
+        normalizedStatus = AdminRequestStatus.REJECTED;
+        break;
+      default:
+        normalizedStatus = AdminRequestStatus.PENDING;
+    }
+
     const updated = await this.prisma.adminRequest.update({
       where: { id: requestId },
       data: {
-        status: status.toUpperCase(),
+        status: normalizedStatus,
         adminNotes: adminNotes || null,
       },
     });
 
-    // Optional: Send an email notification to the vendor regarding their cashout/query response
+    // ➔ EMIT REAL-TIME SOCKET EVENT TO THE VENDOR
+    if (request.vendorId) {
+      this.socketGateway.emitToAll('admin:request-updated', {
+        vendorId: request.vendorId,
+        requestId: updated.id,
+        status: updated.status,
+        adminNotes: updated.adminNotes,
+        type: updated.type,
+      });
+    }
+
     if (request.vendor?.user?.email) {
       try {
         await this.emailService.sendMail(
           request.vendor.user.email,
           `Update on your ${request.type} Request - Ingeni Store`,
           `<h3>Hello ${request.vendor.storeName},</h3>
-         <p>Your request regarding <strong>"${request.message}"</strong> has been updated to: <strong>${status.toUpperCase()}</strong>.</p>
-         ${adminNotes ? `<p><strong>Admin Note:</strong> ${adminNotes}</p>` : ''}`
+           <p>Your request regarding <strong>"${request.message}"</strong> has been updated to: <strong>${normalizedStatus}</strong>.</p>
+           ${adminNotes ? `<p><strong>Admin Note:</strong> ${adminNotes}</p>` : ''}`,
         );
       } catch (e) {
         console.error('Failed to email vendor on request status change:', e);
@@ -314,7 +368,7 @@ export class VendorsService {
     });
   }
 
- // --- Fetch orders belonging to a specific vendor ---
+  // --- Fetch orders belonging to a specific vendor ---
   async findVendorOrders(vendorId?: string) {
     const resolvedVendor = vendorId ? await this.getVendorById(vendorId) : null;
     const targetVendorId = resolvedVendor?.id;
@@ -391,32 +445,107 @@ export class VendorsService {
   async updateSettings(userId: string, payload: any) {
     const vendor = await this.getVendorById(userId);
     if (!vendor) {
-      throw new NotFoundException('Vendor profile not found for this user account.');
+      throw new NotFoundException(
+        'Vendor profile not found for this user account.',
+      );
     }
 
-    return this.prisma.vendorSettings.upsert({
-      where: { vendorId: vendor.id },
-      update: {
-        storeName: payload.storeName,
-        ownerName: payload.ownerName,
-        supportEmail: payload.supportEmail,
-        phone: payload.phone,
-        momoNumber: payload.momoNumber,
-        theme: payload.theme,
-        autoAcceptOrders: payload.autoAcceptOrders,
-        emailAlerts: payload.emailAlerts,
-      },
-      create: {
-        vendorId: vendor.id,
-        storeName: payload.storeName || vendor.storeName || "Ingeni Store",
-        ownerName: payload.ownerName || "Ingeni Store Representative",
-        supportEmail: payload.supportEmail || "support@ingenistore.rw",
-        phone: payload.phone || "+250728680460",
-        momoNumber: payload.momoNumber || "+250728680460",
-        theme: payload.theme || "dark",
-        autoAcceptOrders: payload.autoAcceptOrders ?? true,
-        emailAlerts: payload.emailAlerts ?? true,
-      },
+    const cleanPhone = payload.phone?.trim() || null;
+    const cleanEmail = payload.supportEmail?.trim() || null;
+    const cleanStoreName = payload.storeName?.trim() || null;
+    const cleanOwnerName = payload.ownerName?.trim() || null;
+
+    // 1. Check if storeName is available (not owned by a different vendor)
+    let canUpdateStoreName = false;
+    if (cleanStoreName) {
+      const storeOwner = await this.prisma.vendor.findFirst({
+        where: {
+          storeName: cleanStoreName,
+          id: { not: vendor.id },
+        },
+      });
+      if (storeOwner) {
+        throw new BadRequestException(
+          `The store name "${cleanStoreName}" is already used by another store. Please choose a unique store name.`,
+        );
+      }
+      canUpdateStoreName = true;
+    }
+
+    // 2. Check if phone/email are available on User table (not owned by another user)
+    let canUpdateUserPhone = false;
+    if (cleanPhone) {
+      const phoneOwner = await this.prisma.user.findFirst({
+        where: {
+          phone: cleanPhone,
+          id: { not: vendor.userId },
+        },
+      });
+      canUpdateUserPhone = !phoneOwner;
+    }
+
+    let canUpdateUserEmail = false;
+    if (cleanEmail) {
+      const emailOwner = await this.prisma.user.findFirst({
+        where: {
+          email: cleanEmail,
+          id: { not: vendor.userId },
+        },
+      });
+      canUpdateUserEmail = !emailOwner;
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Synchronize User table safely
+      await tx.user.update({
+        where: { id: vendor.userId },
+        data: {
+          ...(cleanOwnerName && { name: cleanOwnerName }),
+          ...(canUpdateUserEmail && cleanEmail && { email: cleanEmail }),
+          ...(canUpdateUserPhone && cleanPhone && { phone: cleanPhone }),
+        },
+      });
+
+      // 2. Synchronize Vendor table
+      await tx.vendor.update({
+        where: { id: vendor.id },
+        data: {
+          ...(canUpdateStoreName && cleanStoreName && { storeName: cleanStoreName }),
+          ...(cleanPhone && { phone: cleanPhone }),
+        },
+      });
+
+      // 3. Upsert VendorSettings record
+      return await tx.vendorSettings.upsert({
+        where: { vendorId: vendor.id },
+        update: {
+          storeName: (canUpdateStoreName && cleanStoreName) ? cleanStoreName : vendor.storeName,
+          ownerName: cleanOwnerName ?? vendor.user?.name ?? '',
+          supportEmail: cleanEmail ?? vendor.user?.email ?? '',
+          phone: cleanPhone ?? vendor.phone ?? '',
+          momoNumber: payload.momoNumber?.trim() || cleanPhone || '',
+          theme: payload.theme || 'dark',
+          autoAcceptOrders: Boolean(payload.autoAcceptOrders ?? true),
+          emailAlerts: Boolean(payload.emailAlerts ?? true),
+        },
+        create: {
+          vendorId: vendor.id,
+          storeName: (canUpdateStoreName && cleanStoreName) ? cleanStoreName : (vendor.storeName || 'Ingeni Store'),
+          ownerName:
+            cleanOwnerName ||
+            vendor.user?.name ||
+            'Ingeni Store Representative',
+          supportEmail:
+            cleanEmail ||
+            vendor.user?.email ||
+            'support@ingenistore.rw',
+          phone: cleanPhone || vendor.phone || '+250728680460',
+          momoNumber: payload.momoNumber?.trim() || cleanPhone || '+250728680460',
+          theme: payload.theme || 'dark',
+          autoAcceptOrders: Boolean(payload.autoAcceptOrders ?? true),
+          emailAlerts: Boolean(payload.emailAlerts ?? true),
+        },
+      });
     });
   }
 

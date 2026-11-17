@@ -2,10 +2,10 @@
   "compilerOptions": {
     "module": "node16",
     "moduleResolution": "node16",
-    "types": ["node", "multer", "express", "jest"],
+    "types": ["node", "multer", "express", "jest", "nodemailer"],
     "paths": {
-  "src/*": ["./src/*"]
-},
+      "src/*": ["./src/*"]
+    },
 
     "skipLibCheck": true,
     "allowJs": true,
@@ -20,7 +20,7 @@
     "target": "ES2022",
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "incremental": false,
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
@@ -29,5 +29,5 @@
     "noFallthroughCasesInSwitch": false
   },
   "include": ["src/**/*"],
-"exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
 }

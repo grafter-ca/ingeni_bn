@@ -2,7 +2,7 @@ import { Controller, Get, Patch, Delete, Param, Query, HttpStatus, UseGuards, Re
 import { UserService } from './user.service.js';
 import { Roles } from '@thallesp/nestjs-better-auth';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
-import { UserRole } from '../../generated/prisma/index.js';
+import { UserRole } from '../../generated/prisma/client.js';
 import { UpdateRoleDto } from '../dto/update-role.dto.js';
 
 @Controller('admin/users')

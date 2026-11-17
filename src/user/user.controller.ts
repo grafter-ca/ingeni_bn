@@ -6,7 +6,7 @@ import {
   Req
 } from '@nestjs/common';
 import { UserService } from './user.service.js';
-import { UserRole } from '../../generated/prisma/index.js';
+import { UserRole } from '../../generated/prisma/client.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { Roles } from '@thallesp/nestjs-better-auth';
 import { Request } from 'express';
