@@ -48,6 +48,9 @@ async function bootstrap() {
     exposedHeaders: ['Set-Cookie'],
   });
 
+  // compression
+  app.use(compression())
+
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginEmbedderPolicy: false,
@@ -69,6 +72,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
+      forbidNonWhitelisted:false,
       transform: true,
     }),
   );

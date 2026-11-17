@@ -1,11 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "esm"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 ////////////////////////////////////////////////////
@@ -33,9 +33,9 @@ model User {
   accounts Account[]
   sessions Session[]
 
-  orders    Order[]
-  payments Payment[]
-  wishlists Wishlist[]
+  orders     Order[]
+  payments   Payment[]
+  wishlists  Wishlist[]
 
   vendor Vendor?
 
@@ -61,7 +61,7 @@ model Vendor {
   address     String?
   phone       String?
   logoUrl     String?
-  settings        VendorSettings?
+  settings       VendorSettings?
   adminRequests  AdminRequest[]
 
   user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -126,16 +126,16 @@ model ProductImage {
 }
 
 model ProductReview {
-  id        String   @id @default(cuid())
-  rating    Int
-  comment   String   @db.Text
+  id         String   @id @default(cuid())
+  rating     Int
+  comment    String   @db.Text
   
   productId String
   userId    String?
   authorName String?
 
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -187,16 +187,18 @@ model VendorSettings {
 }
 
 model AdminRequest {
-  id         String   @id @default(uuid())
+  id         String             @id @default(uuid())
   vendorId   String
-  type       String   // 'CASHOUT' | 'DASHBOARD_FEATURE' | 'SUPPORT'
+  type       String             // 'CASHOUT' | 'DASHBOARD_FEATURE' | 'SUPPORT'
   amount     String?
   message    String
-  adminNotes String?
-  status     String   @default("PENDING") // 'PENDING' | 'RESOLVED'
-  createdAt DateTime @default(now())
+  adminNotes String?            @map("admin_notes")
+  status     AdminRequestStatus @default(PENDING)
+  createdAt  DateTime           @default(now()) @map("created_at")
 
-  vendor     Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendor     Vendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@map("admin_request")
 }
 
 ////////////////////////////////////////////////////
@@ -317,36 +319,36 @@ model Payment {
 ////////////////////////////////////////////////////
 
 model Session {
-  id        String   @id @default(cuid())
-  expiresAt DateTime
-  token     String   @unique
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  ipAddress String?
-  userAgent String?
+  id                   String   @id @default(cuid())
+  expiresAt            DateTime
+  token                String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress            String?
+  userAgent            String?
+  impersonatedBy       String?
+  activeOrganizationId String?
 
   @@map("session")
 }
 
 model Account {
-  id         String  @id @default(cuid())
-  accountId  String
-  providerId String
-  provider   String?
-  type       String?
-
-  password String?
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  accessToken  String?
-  refreshToken String?
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  provider              String?
+  type                  String?
+  password              String?
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -367,10 +369,10 @@ model Verification {
 }
 
 model Organization {
-  id   String  @id
-  name String
-  slug String? @unique
-  logo String?
+  id    String @id
+  name  String
+  slug  String? @unique
+  logo  String?
 
   createdAt DateTime
   metadata  String?
@@ -403,8 +405,8 @@ model Invitation {
   role           String?
   status         String
   expiresAt      DateTime
-
-  inviterId String
+  inviterId      String
+  createdAt      DateTime @default(now())
 
   user         User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -451,4 +453,10 @@ enum PaymentMethod {
   CREDIT_CARD
   CASH_ON_DELIVERY
   WORKFORCE_WALLET
+}
+
+enum AdminRequestStatus{
+  PENDING
+  APPROVED
+  REJECTED
 }
