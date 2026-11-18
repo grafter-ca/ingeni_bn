@@ -6,14 +6,14 @@ RUN apt-get update && apt-get install -y openssl libssl-dev && rm -rf /var/lib/a
 
 WORKDIR /app
 
-# 1. Copy package files from the backend folder
-COPY backend/package*.json ./
+# 1. Copy package files
+COPY package*.json ./
 
 # 2. Install dependencies
 RUN npm ci --network-timeout=100000
 
-# 3. Copy the backend source AND the prisma folder specifically
-COPY backend/ . 
+# 3. Copy the rest of the source code
+COPY . . 
 
 # 4. Generate Prisma client (Explicitly pointing to the schema location)
 RUN npx prisma generate --schema ./prisma/schema.prisma
@@ -33,8 +33,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/generated ./generated
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/prisma.config.js ./prisma.config.js
 
 EXPOSE 8000
 
-# Push the schema to Neon and start
-CMD ["sh", "-c", "npx prisma db push && node dist/main.js"]
+# Updated entrypoint pointing to dist/src/main.js
+CMD ["sh", "-c", "npx prisma db push && node dist/src/main.js"]
