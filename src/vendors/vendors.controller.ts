@@ -165,17 +165,18 @@ async updateSettings(@Req() req: any, @Body() payload: Record<string, any>) {
     return this.vendorsService.updateOrderStatus(orderId, status);
   }
 
-  @Patch('admin-requests/:id')
+@Patch('admin-requests/:id')
   @UseGuards(RolesGuard)
   @Roles(['admin'])
-  async updateAdminRequest(
+  async updateAdminRequestStatus(
     @Param('id') id: string,
-    @Body() payload: { status: string; adminNotes?: string },
+    @Body('status') status: string,
+    @Body('adminNotes') adminNotes?: string,
   ) {
     return this.vendorsService.updateAdminRequestStatus(
       id,
-      payload.status,
-      payload.adminNotes,
+      status,
+      adminNotes,
     );
   }
 
@@ -215,15 +216,18 @@ async updateSettings(@Req() req: any, @Body() payload: Record<string, any>) {
       message?: string;
     },
   ) {
+   const cleanPhone = body.phone && body.phone !== 'undefined' && body.phone.trim() !== '' 
+      ? body.phone 
+      : 'Registered MoMo';
+
     return this.vendorsService.submitAdminRequest(vendorId, {
       type: body.type || 'CASHOUT',
       amount: String(body.amount),
       message:
         body.message ||
-        `Cashout request to MoMo number: ${body.phone || 'Registered MoMo'}`,
+        `Cashout request to MoMo number: ${cleanPhone}`,
     });
   }
-
   @Patch(':id/toggle-status')
   @UseGuards(RolesGuard)
   @Roles(['admin'])

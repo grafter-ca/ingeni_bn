@@ -17,6 +17,7 @@ import { HealthService } from './health/health.service.js';
 import { HealthController } from './health/health.controller.js';
 import { HealthModule } from './health/health.module.js';
 import { EventsModule } from './events/events.module.js';
+import { AdminModule } from './admin/admin.module.js';
 
 @Module({
   imports: [
@@ -43,7 +44,8 @@ import { EventsModule } from './events/events.module.js';
     CloudinaryModule,
     AnalyticsModule,
     HealthModule,
-    EventsModule
+    EventsModule,
+    AdminModule
   ],
   controllers: [HealthController],
   providers: [OrderService, HealthService],
