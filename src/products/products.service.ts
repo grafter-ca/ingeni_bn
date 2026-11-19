@@ -1,37 +1,45 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { EmailService } from '../libs/nodemail/email.service.js';
 
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ProductsService.name);
 
-  private async getAccessFilters(isPublic: boolean, userContext?: { id: string; role: string }, vendorId?: string) {
-    const filters: any = {}; 
-    
+  constructor(
+    private prisma: PrismaService,
+    private emailService: EmailService,
+  ) {}
+
+  private async getAccessFilters(
+    isPublic: boolean,
+    userContext?: { id: string; role: string },
+    vendorId?: string,
+  ) {
+    const filters: any = {};
+
     if (isPublic) {
       filters.isActive = true;
-    } 
-    else if (!isPublic && userContext?.role === 'vendor') {
+    } else if (!isPublic && userContext?.role === 'vendor') {
       const vendorProfile = await this.prisma.vendor.findUnique({
         where: { userId: userContext.id },
         select: { id: true },
       });
       if (!vendorProfile) throw new ForbiddenException('Vendor profile not found.');
-      filters.vendorId = vendorProfile.id; 
-    } 
-    else if (vendorId) {
-      filters.vendorId = vendorId; 
+      filters.vendorId = vendorProfile.id;
+    } else if (vendorId) {
+      filters.vendorId = vendorId;
     }
-    
+
     return filters;
   }
 
-  // --- FIND ALL PRODUCTS ---
   async findAll(
     params: {
       categoryName?: string;
@@ -47,12 +55,20 @@ export class ProductsService {
       includeInactive?: boolean;
     } = {},
     isPublic: boolean = false,
-    userContext?: { id: string; role: string }
+    userContext?: { id: string; role: string },
   ) {
-    const { categoryName, vendorId, limit = 20, offset = 0, title, storeInfo, includeInactive = false } = params;
-    
+    const {
+      categoryName,
+      vendorId,
+      limit = 20,
+      offset = 0,
+      title,
+      storeInfo,
+      includeInactive = false,
+    } = params;
+
     const accessFilters = await this.getAccessFilters(isPublic, userContext, vendorId);
-    
+
     let resolvedVendorId = vendorId;
 
     if (!isPublic && userContext && userContext.role === 'vendor') {
@@ -79,10 +95,16 @@ export class ProductsService {
         ...(resolvedVendorId && { vendorId: resolvedVendorId }),
         ...(storeInfo && {
           vendor: {
-            ...(storeInfo.name && { storeName: { contains: storeInfo.name, mode: 'insensitive' } }),
-            ...(storeInfo.address && { address: { contains: storeInfo.address, mode: 'insensitive' } }),
-            ...(storeInfo.contact && { phone: { contains: storeInfo.contact, mode: 'insensitive' } }),
-          }
+            ...(storeInfo.name && {
+              storeName: { contains: storeInfo.name, mode: 'insensitive' },
+            }),
+            ...(storeInfo.address && {
+              address: { contains: storeInfo.address, mode: 'insensitive' },
+            }),
+            ...(storeInfo.contact && {
+              phone: { contains: storeInfo.contact, mode: 'insensitive' },
+            }),
+          },
         }),
         ...(title && {
           title: { contains: title, mode: 'insensitive' },
@@ -94,13 +116,12 @@ export class ProductsService {
         category: true,
         images: true,
         vendor: true,
-        reviews: true, // <-- Added reviews here so ProductCard calculates ratings correctly
+        reviews: true,
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  // --- FIND ONE PRODUCT ---
   async findOne(idOrSlug: string) {
     const product = await this.prisma.product.findFirst({
       where: {
@@ -110,7 +131,7 @@ export class ProductsService {
         category: true,
         images: true,
         vendor: true,
-        reviews: true, // <-- Added reviews here as well
+        reviews: true,
       },
     });
 
@@ -120,7 +141,39 @@ export class ProductsService {
     return product;
   }
 
-  // --- CREATE PRODUCT ---
+  private async notifySubscribersOfNewProduct(
+    createdProduct: any,
+    creatorUserId: string,
+  ) {
+    if (!createdProduct?.isActive) return;
+
+    try {
+      const accountUsers = await this.prisma.user.findMany({
+        where: {
+          id: { not: creatorUserId },
+          banned: { not: true },
+        },
+        select: {
+          email: true,
+          name: true,
+        },
+      });
+
+      if (accountUsers.length === 0) return;
+
+      await this.emailService.broadcastNewProductToSubscribers(accountUsers, {
+        productTitle: createdProduct.title,
+        productSlug: createdProduct.slug,
+        price: Number(createdProduct.price || 0),
+        categoryName: createdProduct.category?.name,
+        storeName: createdProduct.vendor?.storeName || 'Ingeni Market',
+        location: createdProduct.location,
+      });
+    } catch (err) {
+      this.logger.error('Failed to broadcast new product alerts:', err);
+    }
+  }
+
   async create(dto: any, userContext: { id: string; role: string }) {
     const { images = [], categoryId, vendorId, ...productData } = dto;
 
@@ -137,7 +190,9 @@ export class ProductsService {
 
     if (userContext.role === 'admin') {
       if (!vendorId) {
-        throw new BadRequestException('Administrative listings require an explicit vendorId parameter.');
+        throw new BadRequestException(
+          'Administrative listings require an explicit vendorId parameter.',
+        );
       }
 
       let vendorProfile = await this.prisma.vendor.findUnique({ where: { id: vendorId } });
@@ -148,13 +203,15 @@ export class ProductsService {
       if (!vendorProfile) {
         const userExists = await this.prisma.user.findUnique({ where: { id: vendorId } });
         if (!userExists) {
-          throw new NotFoundException(`Target account or vendor with ID "${vendorId}" does not exist.`);
+          throw new NotFoundException(
+            `Target account or vendor with ID "${vendorId}" does not exist.`,
+          );
         }
 
         vendorProfile = await this.prisma.vendor.create({
           data: {
             userId: vendorId,
-            storeName: 'Ingeri Admin Store',
+            storeName: 'Ingeni Market Admin Store',
           },
         });
       }
@@ -165,7 +222,9 @@ export class ProductsService {
         where: { userId: userContext.id },
       });
       if (!vendorProfile) {
-        throw new ForbiddenException('Your account must have an active vendor profile to register items.');
+        throw new ForbiddenException(
+          'Your account must have an active vendor profile to register items.',
+        );
       }
       assignedVendorId = vendorProfile.id;
     }
@@ -181,13 +240,12 @@ export class ProductsService {
     try {
       const cleanImages = (Array.isArray(images) ? images : [])
         .map((url: any) => String(url).trim())
-        .filter((url: string) => url !== "");
+        .filter((url: string) => url !== '');
 
-      const initialIsActive = productData.isActive !== undefined 
-        ? Boolean(productData.isActive) 
-        : true;
+      const initialIsActive =
+        productData.isActive !== undefined ? Boolean(productData.isActive) : true;
 
-      return await this.prisma.product.create({
+      const createdProduct = await this.prisma.product.create({
         data: {
           title: productData.title,
           description: productData.description,
@@ -209,35 +267,46 @@ export class ProductsService {
           reviews: true,
         },
       });
+
+      // Notify platform users/subscribers asynchronously so product creation stays fast
+      void this.notifySubscribersOfNewProduct(createdProduct, userContext.id);
+
+      return createdProduct;
     } catch (error: any) {
       if (error.code === 'P2002') {
-        throw new BadRequestException('A unique property conflict occurred (Check title or slug).');
+        throw new BadRequestException(
+          'A unique property conflict occurred (Check title or slug).',
+        );
       }
       throw error;
     }
   }
 
-  // --- UPDATE PRODUCT ---
   async update(id: string, dto: any, userContext: { id: string; role: string }) {
     const { images, categoryId, vendorId, images_to_keep, ...productData } = dto;
-    
+
     const existingProduct = await this.findOne(id);
 
     if (userContext.role !== 'admin') {
-      const vendorProfile = await this.prisma.vendor.findUnique({ where: { userId: userContext.id } });
+      const vendorProfile = await this.prisma.vendor.findUnique({
+        where: { userId: userContext.id },
+      });
       if (!vendorProfile || existingProduct.vendorId !== vendorProfile.id) {
-        throw new ForbiddenException('You are not authorized to update products outside your store.');
+        throw new ForbiddenException(
+          'You are not authorized to update products outside your store.',
+        );
       }
     }
 
     const updateData: any = { ...productData };
 
     if (productData.title) {
-      updateData.slug = productData.title
-        .toLowerCase()
-        .trim()
-        .replace(/[^\w ]+/g, '')
-        .replace(/ +/g, '-') + `-${Date.now().toString().slice(-4)}`;
+      updateData.slug =
+        productData.title
+          .toLowerCase()
+          .trim()
+          .replace(/[^\w ]+/g, '')
+          .replace(/ +/g, '-') + `-${Date.now().toString().slice(-4)}`;
     }
 
     if (productData.price !== undefined) updateData.price = Number(productData.price);
@@ -246,7 +315,8 @@ export class ProductsService {
     if (userContext.role !== 'admin') {
       delete updateData.isActive;
     } else if (productData.isActive !== undefined) {
-      updateData.isActive = productData.isActive === true || productData.isActive === 'true';
+      updateData.isActive =
+        productData.isActive === true || productData.isActive === 'true';
     }
 
     let resolvedUpdateVendorId: string | undefined = undefined;
@@ -256,23 +326,27 @@ export class ProductsService {
         vendorProfile = await this.prisma.vendor.findUnique({ where: { userId: vendorId } });
       }
       if (!vendorProfile) {
-        throw new NotFoundException(`Target vendor or account with ID "${vendorId}" does not exist.`);
+        throw new NotFoundException(
+          `Target vendor or account with ID "${vendorId}" does not exist.`,
+        );
       }
       resolvedUpdateVendorId = vendorProfile.id;
     }
 
     const cleanImages = (Array.isArray(images) ? images : [])
       .map((url: any) => String(url).trim())
-      .filter((url: string) => url !== "");
+      .filter((url: string) => url !== '');
 
     const existingImagesToKeep = images_to_keep
-      ? (Array.isArray(images_to_keep) ? images_to_keep : [images_to_keep])
+      ? Array.isArray(images_to_keep)
+        ? images_to_keep
+        : [images_to_keep]
       : [];
 
     return this.prisma.$transaction(async (tx) => {
       if (images && Array.isArray(images)) {
-        await tx.productImage.deleteMany({ 
-          where: { 
+        await tx.productImage.deleteMany({
+          where: {
             productId: id,
             url: { notIn: existingImagesToKeep },
           },
@@ -284,12 +358,16 @@ export class ProductsService {
         data: {
           ...updateData,
           ...(categoryId && { category: { connect: { id: categoryId } } }),
-          ...(resolvedUpdateVendorId && { vendor: { connect: { id: resolvedUpdateVendorId } } }),
-          ...(images && Array.isArray(images) && cleanImages.length > 0 && {
-            images: {
-              create: cleanImages.map((url: string) => ({ url })),
-            },
+          ...(resolvedUpdateVendorId && {
+            vendor: { connect: { id: resolvedUpdateVendorId } },
           }),
+          ...(images &&
+            Array.isArray(images) &&
+            cleanImages.length > 0 && {
+              images: {
+                create: cleanImages.map((url: string) => ({ url })),
+              },
+            }),
         },
         include: {
           category: true,
@@ -301,20 +379,24 @@ export class ProductsService {
     });
   }
 
-  // --- APPROVE PRODUCT ---
   async approveProduct(id: string, approve: boolean) {
-    await this.findOne(id);
-    return this.prisma.product.update({
+    const existing = await this.findOne(id);
+    const updated = await this.prisma.product.update({
       where: { id },
       data: { isActive: approve },
       include: { category: true, images: true, vendor: true, reviews: true },
     });
+
+    if (!existing.isActive && approve) {
+      void this.notifySubscribersOfNewProduct(updated, updated.vendor?.userId || '');
+    }
+
+    return updated;
   }
 
-  // --- SEARCH PRODUCTS ---
   async searchProducts(query: string) {
     if (!query || query.trim() === '') return [];
-    
+
     return this.prisma.product.findMany({
       where: {
         isActive: true,
@@ -333,24 +415,26 @@ export class ProductsService {
     });
   }
 
-  // --- REMOVE PRODUCT ---
   async remove(id: string, userContext: { id: string; role: string }) {
     const product = await this.findOne(id);
 
     if (userContext.role !== 'admin') {
-      const vendorProfile = await this.prisma.vendor.findUnique({ where: { userId: userContext.id } });
+      const vendorProfile = await this.prisma.vendor.findUnique({
+        where: { userId: userContext.id },
+      });
       if (!vendorProfile || product.vendorId !== vendorProfile.id) {
-        throw new ForbiddenException('You can only delete product entities owned by your storefront.');
+        throw new ForbiddenException(
+          'You can only delete product entities owned by your storefront.',
+        );
       }
     }
-    
+
     return this.prisma.$transaction(async (tx) => {
       await tx.productImage.deleteMany({ where: { productId: id } });
       return tx.product.delete({ where: { id } });
     });
   }
 
-  // --- REVIEWS METHODS ---
   async getProductReviews(productId: string) {
     return this.prisma.productReview.findMany({
       where: { productId },
@@ -360,22 +444,22 @@ export class ProductsService {
           select: {
             email: true,
             name: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
   }
 
   async addProductReview(
-    productId: string, 
-    dto: { rating: number; comment: string; authorName?: string }, 
-    userId?: string | null
+    productId: string,
+    dto: { rating: number; comment: string; authorName?: string },
+    userId?: string | null,
   ) {
     return this.prisma.productReview.create({
       data: {
         productId,
         userId: userId ? userId : undefined,
-        authorName: !userId ? (dto.authorName?.trim() || 'Anonymous') : undefined,
+        authorName: !userId ? dto.authorName?.trim() || 'Anonymous' : undefined,
         rating: Number(dto.rating),
         comment: dto.comment,
       },
@@ -384,26 +468,36 @@ export class ProductsService {
           select: {
             name: true,
             email: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
   }
 
-  async checkWishlistStatus(productId: string, userId?: string, guestId?: string): Promise<boolean> {
+  async checkWishlistStatus(
+    productId: string,
+    userId?: string,
+    guestId?: string,
+  ): Promise<boolean> {
     if (userId) {
       const record = await this.prisma.wishlist.findFirst({
         where: { userId, productId },
       });
       return !!record;
     }
-    
-    return false; 
+
+    return false;
   }
 
-  async toggleWishlist(productId: string, userId?: string, guestId?: string): Promise<{ status: boolean; message: string }> {
+  async toggleWishlist(
+    productId: string,
+    userId?: string,
+    guestId?: string,
+  ): Promise<{ status: boolean; message: string }> {
     if (!userId) {
-      throw new BadRequestException('Please log in to sync your wishlist across devices.');
+      throw new BadRequestException(
+        'Please log in to sync your wishlist across devices.',
+      );
     }
 
     const existing = await this.prisma.wishlist.findFirst({
