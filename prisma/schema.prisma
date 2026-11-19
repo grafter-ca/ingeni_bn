@@ -36,6 +36,7 @@ model User {
   orders     Order[]
   payments   Payment[]
   wishlists  Wishlist[]
+  adminRequests  AdminRequest[]
 
   vendor Vendor?
 
@@ -188,7 +189,8 @@ model VendorSettings {
 
 model AdminRequest {
   id         String             @id @default(uuid())
-  vendorId   String
+  vendorId   String?            // Optional: for established store requests
+  userId     String?            // Optional: for direct user/merchant inquiries
   type       String             // 'CASHOUT' | 'DASHBOARD_FEATURE' | 'SUPPORT'
   amount     String?
   message    String
@@ -196,7 +198,8 @@ model AdminRequest {
   status     AdminRequestStatus @default(PENDING)
   createdAt  DateTime           @default(now()) @map("created_at")
 
-  vendor     Vendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendor     Vendor?            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  user       User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("admin_request")
 }
@@ -455,8 +458,10 @@ enum PaymentMethod {
   WORKFORCE_WALLET
 }
 
-enum AdminRequestStatus{
+enum AdminRequestStatus {
   PENDING
+  PROCESSING
+  RESOLVED
   APPROVED
   REJECTED
 }

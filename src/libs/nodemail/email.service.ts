@@ -1,9 +1,15 @@
-// src/libs/nodemail/email.service.ts
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+
+export interface EmailDispatchResult {
+  success: boolean;
+  messageId: string | null;
+  reason?: string;
+}
 
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
 
   constructor() {
@@ -24,20 +30,61 @@ export class EmailService {
   /**
    * Core execution method to dispatch raw mail payloads
    */
-  async sendMail(to: string, subject: string, htmlContent: string) {
+  async sendMail(to: string, subject: string, htmlContent: string): Promise<EmailDispatchResult> {
+    if (!to || !to.trim()) {
+      this.logger.warn(`Skipped email ("${subject}"): missing recipient email address.`);
+      return { success: false, messageId: null, reason: 'Missing recipient email address' };
+    }
+
+    const cleanRecipient = to.trim();
     const mailOptions = {
       from: `"Ingeri Store Support" <${process.env.SMTP_USER}>`,
-      to,
+      to: cleanRecipient,
       subject,
       html: htmlContent,
     };
 
     try {
       const info = await this.transporter.sendMail(mailOptions);
+      this.logger.log(
+        `Email accepted by SMTP | to=${cleanRecipient} | subject="${subject}" | messageId=${info.messageId}`,
+      );
       return { success: true, messageId: info.messageId };
     } catch (error: any) {
+      this.logger.error(
+        `Email failed | to=${cleanRecipient} | subject="${subject}" | error=${error.message}`,
+      );
       throw new InternalServerErrorException(`Email pipeline breakdown: ${error.message}`);
     }
+  }
+
+  // --- EMAIL TEMPLATE: VENDOR PROFILE / STORE UPDATE ALERT ---
+  async sendVendorProfileUpdateAlert(
+    vendorEmail: string,
+    recipientName: string,
+    storeName: string,
+    updatedFields: string[],
+  ): Promise<EmailDispatchResult> {
+    const subject = `🔄 Store & Profile Information Updated: ${storeName}`;
+    const fieldsList =
+      updatedFields.length > 0
+        ? `<p><strong>Updated fields:</strong> ${updatedFields.join(', ')}</p>`
+        : '';
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px;">
+        <h2 style="color: #2563EB; margin-top: 0;">Store Profile Updated</h2>
+        <p>Hello ${recipientName},</p>
+        <p>Your vendor profile and store details for <strong>${storeName}</strong> have been updated.</p>
+        ${fieldsList}
+        <p style="font-size: 13px; color: #4B5563;">If you did not request or authorize these changes, please contact support immediately.</p>
+        <hr style="border: 0; border-top: 1px solid #eeeeee; margin: 20px 0;" />
+        <footer style="font-size: 12px; color: #777777;">
+          Automated notification from Ingeri Store Systems.
+        </footer>
+      </div>
+    `;
+    return this.sendMail(vendorEmail, subject, html);
   }
 
   // --- EMAIL TEMPLATE: PRODUCT CREATION CONFIRMATION ---
@@ -77,7 +124,6 @@ export class EmailService {
 
   // --- EMAIL TEMPLATE: VENDOR SECURITY INCIDENT DESK ---
   async sendSecurityIssueRequest(vendorEmail: string, storeName: string, issueDetails: string) {
-    // Dispatches a highly visible critical alert to your primary admin mailbox
     const systemAdminEmail = process.env.SMTP_USER as string;
     const subject = `⚠️ CRITICAL: Security Issue Flagged by Vendor [${storeName}]`;
     const html = `
@@ -128,5 +174,90 @@ export class EmailService {
       </div>
     `;
     return this.sendMail(adminEmail, subject, html);
+  }
+
+  async sendOrderConfirmationEmail(
+    to: string,
+    customerName: string,
+    orderNumber: string,
+    totalAmount: number,
+    items: Array<{ title?: string; quantity: number; priceAtPurchase: number }>,
+  ): Promise<EmailDispatchResult> {
+    const subject = `🧾 Order Confirmed: ${orderNumber}`;
+    const rows = items
+      .map(
+        (item) =>
+          `<tr>
+            <td style="padding: 6px 8px; border-bottom: 1px solid #eee;">${item.title || 'Item'}</td>
+            <td style="padding: 6px 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+            <td style="padding: 6px 8px; border-bottom: 1px solid #eee; text-align: right;">RWF ${(Number(item.priceAtPurchase) * Number(item.quantity)).toLocaleString()}</td>
+          </tr>`,
+      )
+      .join('');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px;">
+        <h2 style="color: #059669; margin-top: 0;">Order Placed Successfully</h2>
+        <p>Hello ${customerName},</p>
+        <p>We have received your order <strong>${orderNumber}</strong>.</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px;">
+          <thead>
+            <tr style="background: #f9fafb; text-align: left;">
+              <th style="padding: 8px;">Product</th>
+              <th style="padding: 8px; text-align: center;">Qty</th>
+              <th style="padding: 8px; text-align: right;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p style="font-size: 15px;"><strong>Total: RWF ${Number(totalAmount).toLocaleString()}</strong></p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+        <footer style="font-size: 12px; color: #6b7280;">Ingeri Store Order Tracking</footer>
+      </div>
+    `;
+    return this.sendMail(to, subject, html);
+  }
+
+  async sendOrderTrackingUpdateEmail(
+    to: string,
+    customerName: string,
+    orderNumber: string,
+    status: string,
+    paymentStatus?: string,
+  ): Promise<EmailDispatchResult> {
+    const subject = `📦 Order ${orderNumber} Status: ${status}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px;">
+        <h2 style="color: #2563EB; margin-top: 0;">Order Tracking Update</h2>
+        <p>Hello ${customerName},</p>
+        <p>Your order <strong>${orderNumber}</strong> has been updated.</p>
+        <p><strong>Fulfillment Status:</strong> ${status}</p>
+        ${paymentStatus ? `<p><strong>Payment Status:</strong> ${paymentStatus}</p>` : ''}
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+        <footer style="font-size: 12px; color: #6b7280;">Ingeri Store Order Tracking</footer>
+      </div>
+    `;
+    return this.sendMail(to, subject, html);
+  }
+
+  async sendPaymentUpdateEmail(
+    to: string,
+    customerName: string,
+    orderNumber: string,
+    paymentStatus: string,
+    note?: string,
+  ): Promise<EmailDispatchResult> {
+    const subject = `💳 Payment Update for Order ${orderNumber}: ${paymentStatus}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px;">
+        <h2 style="color: #4F46E5; margin-top: 0;">Payment Status Update</h2>
+        <p>Hello ${customerName},</p>
+        <p>The payment status for order <strong>${orderNumber}</strong> is now <strong>${paymentStatus}</strong>.</p>
+        ${note ? `<p>${note}</p>` : ''}
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+        <footer style="font-size: 12px; color: #6b7280;">Ingeri Store Billing & Order Tracking</footer>
+      </div>
+    `;
+    return this.sendMail(to, subject, html);
   }
 }

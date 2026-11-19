@@ -1,76 +1,142 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CloudinaryService } from '../libs/cloudinary/cloudinary.service.js';
+
+interface CategoryInput {
+  name?: string;
+  image?: string;
+}
 
 @Injectable()
 export class CategoryService {
   constructor(
-    private prisma: PrismaService,
-    private cloudinary: CloudinaryService,
+    private readonly prisma: PrismaService,
+    private readonly cloudinary: CloudinaryService,
   ) {}
+
+  private isValidImageReference(value: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    if (trimmed.startsWith('/')) return true;
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    } catch {
+      return false;
+    }
+  }
+
+  private async resolveImage(
+    rawImage: unknown,
+    file?: Express.Multer.File,
+    required = false,
+  ): Promise<string | undefined> {
+    if (file) {
+      const upload = await this.cloudinary.uploadFile(file);
+      return upload.secure_url;
+    }
+
+    if (typeof rawImage === 'string') {
+      const trimmed = rawImage.trim();
+      if (!trimmed) {
+        if (required) {
+          throw new BadRequestException(
+            'A valid category representation image file or URL must be submitted',
+          );
+        }
+        return undefined;
+      }
+
+      if (!this.isValidImageReference(trimmed)) {
+        throw new BadRequestException('Category image must be a valid HTTP(S) URL or path');
+      }
+
+      return trimmed;
+    }
+
+    if (required) {
+      throw new BadRequestException(
+        'A valid category representation image file or URL must be submitted',
+      );
+    }
+
+    return undefined;
+  }
 
   /**
    * Creates a brand category, prioritizing physical multipart uploads over fallback URLs
    */
-  async create(data: any, file?: Express.Multer.File) {
-    if (!data.name || String(data.name).trim() === '') {
+  async create(data: CategoryInput | undefined, file?: Express.Multer.File) {
+    const payload = data ?? {};
+    const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+
+    if (!name) {
       throw new BadRequestException('Category name parameter is explicitly required');
     }
 
-    let resolvedImageUrl = data.image || ''; 
+    const resolvedImageUrl = await this.resolveImage(payload.image, file, true);
 
-    // If a raw image stream is transmitted from the user's browser, pipe directly to Cloudinary
-    if (file) {
-      const upload = await this.cloudinary.uploadFile(file);
-      resolvedImageUrl = upload.secure_url; 
+    try {
+      return await this.prisma.category.create({
+        data: {
+          name,
+          image: resolvedImageUrl!,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        throw new ConflictException(`A category named "${name}" already exists.`);
+      }
+      throw error;
     }
-
-    if (!resolvedImageUrl) {
-      throw new BadRequestException('A valid category representation image file or URL must be submitted');
-    }
-
-    return this.prisma.category.create({
-      data: {
-        name: String(data.name).trim(),
-        image: resolvedImageUrl, // Correctly synchronized field mapped to schema rule
-      },
-    });
   }
 
   /**
    * Updates text properties and purges unreferenced schema properties safely
    */
-  async update(id: string, data: any, file?: Express.Multer.File) {
-    // 1. Verify that the matching database category record target exists
+  async update(id: string, data: CategoryInput | undefined, file?: Express.Multer.File) {
     await this.findOne(id);
+    const payload = data ?? {};
 
-    let resolvedImageUrl = data.image;
+    const resolvedImageUrl = await this.resolveImage(payload.image, file, false);
 
-    // 2. Overwrite the image configuration property if a clean replacement file is part of the request stream
-    if (file) {
-      const upload = await this.cloudinary.uploadFile(file);
-      resolvedImageUrl = upload.secure_url;
+    const updatedPayload: { name?: string; image?: string } = {};
+
+    if (payload.name !== undefined) {
+      const trimmedName = String(payload.name).trim();
+      if (!trimmedName) {
+        throw new BadRequestException('Category name cannot be empty');
+      }
+      updatedPayload.name = trimmedName;
     }
 
-    // 3. Construct clean properties payload, shielding the database engine from dirty fields
-    const updatedPayload: any = {};
-    if (data.name !== undefined) {
-      updatedPayload.name = String(data.name).trim();
-    }
     if (resolvedImageUrl !== undefined) {
-      updatedPayload.image = resolvedImageUrl; // Correctly maps destination string variables safely
+      updatedPayload.image = resolvedImageUrl;
     }
 
-    return this.prisma.category.update({
-      where: { id },
-      data: updatedPayload,
-    });
+    try {
+      return await this.prisma.category.update({
+        where: { id },
+        data: updatedPayload,
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        throw new ConflictException(
+          `A category named "${updatedPayload.name}" already exists.`,
+        );
+      }
+      throw error;
+    }
   }
 
   async findAll() {
     return this.prisma.category.findMany({
       include: {
-        // Appends a fast relational counter tracking associated product quantities
         _count: { select: { products: true } },
       },
       orderBy: { name: 'asc' },
@@ -92,8 +158,7 @@ export class CategoryService {
     try {
       return await this.prisma.category.delete({ where: { id } });
     } catch (error: any) {
-      // Catches instances where active products depend directly on this category mapping node
-      if (error.code === 'P2003') {
+      if (error?.code === 'P2003') {
         throw new BadRequestException(
           'Cannot safely remove this category because it is still actively tied to existing products.',
         );
