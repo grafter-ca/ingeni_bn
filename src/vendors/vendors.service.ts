@@ -1,18 +1,23 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { EmailService, type EmailDispatchResult } from '../libs/nodemail/email.service.js';
+import {
+  EmailService,
+  type EmailDispatchResult,
+} from '../libs/nodemail/email.service.js';
 import { SocketGateway } from '../socket/socket.gateway.js';
-import { OrderStatus, AdminRequestStatus } from '../../generated/prisma/client.js';
+import {
+  OrderStatus,
+  AdminRequestStatus,
+} from '../../generated/prisma/client.js';
 
 @Injectable()
 export class VendorsService {
   private readonly logger = new Logger(VendorsService.name);
-  private pendingRequestsCache: Array<{
-    id: string;
-    user: { id: string; name: string; email: string };
-    businessDescription: string;
-    submittedAt: string;
-  }> = [];
 
   constructor(
     private readonly prisma: PrismaService,
@@ -20,9 +25,37 @@ export class VendorsService {
     private readonly socketGateway: SocketGateway,
   ) {}
 
+  private async safeSendEmail(
+    to: string | null | undefined,
+    subject: string,
+    html: string,
+    contextLabel: string,
+  ): Promise<EmailDispatchResult> {
+    if (!to || !to.trim()) {
+      return {
+        success: false,
+        messageId: null,
+        reason: 'No recipient email address available',
+      };
+    }
+
+    try {
+      return await this.emailService.sendMail(to.trim(), subject, html);
+    } catch (err) {
+      this.logger.error(`Failed to send email [${contextLabel}] to ${to}:`, err);
+      return {
+        success: false,
+        messageId: null,
+        reason: 'SMTP dispatch error',
+      };
+    }
+  }
+
   async findAll() {
     return this.prisma.vendor.findMany({
-      include: { user: { select: { email: true, name: true, id: true, phone: true } } },
+      include: {
+        user: { select: { email: true, name: true, id: true, phone: true } },
+      },
     });
   }
 
@@ -50,31 +83,53 @@ export class VendorsService {
     phone?: string;
     user?: { id: string; name: string; email: string };
   }) {
-    const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+    });
     if (!user) {
       throw new NotFoundException('Associated user account not found.');
     }
 
-    const existingVendor = await this.prisma.vendor.findUnique({ where: { userId: data.userId } });
+    const existingVendor = await this.prisma.vendor.findUnique({
+      where: { userId: data.userId },
+    });
     if (existingVendor) {
-      throw new BadRequestException('A vendor profile already exists for this user account.');
+      throw new BadRequestException(
+        'A vendor profile already exists for this user account.',
+      );
     }
 
-    const vendor = await this.prisma.vendor.create({
-      data: {
-        storeName: data.storeName,
-        userId: data.userId,
-        description: data.description,
-        address: data.address,
-        phone: data.phone,
-        isActive: true,
-      },
-      include: { user: true, products: true },
-    });
+    const vendor = await this.prisma.$transaction(async (tx) => {
+      const createdVendor = await tx.vendor.create({
+        data: {
+          storeName: data.storeName,
+          userId: data.userId,
+          description: data.description,
+          address: data.address,
+          phone: data.phone,
+          isActive: true,
+        },
+        include: { user: true, products: true },
+      });
 
-    await this.prisma.user.update({
-      where: { id: data.userId },
-      data: { role: 'vendor' },
+      await tx.user.update({
+        where: { id: data.userId },
+        data: { role: 'vendor' },
+      });
+
+      await tx.adminRequest.updateMany({
+        where: {
+          userId: data.userId,
+          type: 'ONBOARDING',
+          status: AdminRequestStatus.PENDING,
+        },
+        data: {
+          status: AdminRequestStatus.RESOLVED,
+          vendorId: createdVendor.id,
+        },
+      });
+
+      return createdVendor;
     });
 
     this.socketGateway.emitToAll('vendor:approved', {
@@ -84,27 +139,16 @@ export class VendorsService {
       userId: vendor.userId,
     });
 
-    this.pendingRequestsCache = this.pendingRequestsCache.filter((req) => req.user.id !== data.userId);
-
-    let emailNotification: EmailDispatchResult = {
-      success: false,
-      messageId: null,
-      reason: 'No email address on user account',
-    };
-
-    if (vendor.user?.email) {
-      try {
-        emailNotification = await this.emailService.sendMail(
-          vendor.user.email,
-          `Welcome to the Storefront: ${vendor.storeName} is Live!`,
-          `<h3>Hello ${vendor.user.name || 'Valued Partner'},</h3>
-           <p>Your store <strong>${vendor.storeName}</strong> has been successfully set up by the administration team.</p>`,
-        );
-      } catch (emailError) {
-        this.logger.error('Failed to send vendor approval email:', emailError);
-        emailNotification = { success: false, messageId: null, reason: 'SMTP dispatch error' };
-      }
-    }
+    const emailNotification = await this.safeSendEmail(
+      vendor.user?.email,
+      `Welcome to Ingeni Store: Your Storefront "${vendor.storeName}" is Approved & Live!`,
+      `<h3>Hello ${vendor.user?.name || 'Valued Partner'},</h3>
+       <p>Congratulations! Your vendor profile and store <strong>${vendor.storeName}</strong> have been approved and are now active.</p>
+       ${vendor.address ? `<p><strong>Location:</strong> ${vendor.address}</p>` : ''}
+       ${vendor.phone ? `<p><strong>Contact Phone:</strong> ${vendor.phone}</p>` : ''}
+       <p>You can now sign in to your vendor dashboard, add products, and manage orders.</p>`,
+      'vendor-approved',
+    );
 
     return {
       ...vendor,
@@ -116,48 +160,184 @@ export class VendorsService {
     user: { id?: string; name?: string; email?: string },
     businessDescription: string,
   ) {
-    if (!businessDescription || businessDescription.trim().length < 10) {
+    const cleanDescription = businessDescription?.trim();
+    if (!cleanDescription || cleanDescription.length < 10) {
       throw new BadRequestException(
         'Please provide a detailed business description (minimum 10 characters).',
       );
     }
 
     if (!user || !user.email) {
-      throw new BadRequestException('Authentication context missing or invalid email provided.');
+      throw new BadRequestException(
+        'Authentication context missing or invalid email provided.',
+      );
     }
 
-    if (user.id) {
-      const existingVendor = await this.prisma.vendor.findUnique({ where: { userId: user.id } });
+    const dbUser = user.id
+      ? await this.prisma.user.findUnique({ where: { id: user.id } })
+      : await this.prisma.user.findUnique({ where: { email: user.email } });
+
+    if (dbUser) {
+      const existingVendor = await this.prisma.vendor.findUnique({
+        where: { userId: dbUser.id },
+      });
       if (existingVendor) {
-        throw new BadRequestException('You already have an active vendor profile registered.');
+        throw new BadRequestException(
+          'You already have an active vendor profile registered.',
+        );
       }
     }
 
-    const userId = user.id || `temp-${Date.now()}`;
-    const userName = user.name || 'Valued User';
-    const userEmail = user.email;
+    const savedRecord = await this.prisma.adminRequest.create({
+      data: {
+        userId: dbUser?.id ?? null,
+        vendorId: null,
+        type: 'ONBOARDING',
+        message: cleanDescription,
+        status: AdminRequestStatus.PENDING,
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true } },
+      },
+    });
 
-    const newRequest = {
-      id: 'req_' + Date.now(),
-      user: { id: userId, name: userName, email: userEmail },
-      businessDescription,
-      submittedAt: new Date().toISOString(),
+    const applicantName = dbUser?.name || user.name || 'Valued User';
+    const applicantEmail = dbUser?.email || user.email;
+
+    const formattedRequest = {
+      id: savedRecord.id,
+      user: {
+        id: dbUser?.id || user.id || `user_${savedRecord.id}`,
+        name: applicantName,
+        email: applicantEmail,
+      },
+      businessDescription: savedRecord.message,
+      submittedAt: savedRecord.createdAt.toISOString(),
     };
 
-    this.pendingRequestsCache.unshift(newRequest);
-
     try {
-      await this.emailService.sendVendorOnboardingRequest(userName, userEmail, businessDescription);
+      await this.emailService.sendVendorOnboardingRequest(
+        applicantName,
+        applicantEmail,
+        cleanDescription,
+      );
     } catch (emailError) {
-      this.logger.error('Failed to dispatch vendor onboarding email:', emailError);
+      this.logger.error(
+        'Failed to dispatch vendor onboarding admin email:',
+        emailError,
+      );
     }
 
-    this.socketGateway.emitToAll('vendor:request-created', newRequest);
+    const emailNotification = await this.safeSendEmail(
+      applicantEmail,
+      'Vendor Onboarding Request Received - Ingeni Store',
+      `<h3>Hello ${applicantName},</h3>
+       <p>We have received your vendor onboarding request and saved it for admin review.</p>
+       <p><strong>Submitted Business Details:</strong></p>
+       <blockquote>${cleanDescription}</blockquote>
+       <p>We will notify you by email as soon as your application is reviewed.</p>`,
+      'onboarding-receipt',
+    );
+
+    this.socketGateway.emitToAll('vendor:request-created', formattedRequest);
 
     return {
       success: true,
-      message: 'Your vendor onboarding request has been successfully submitted.',
+      request: formattedRequest,
+      emailNotification,
+      message:
+        'Your vendor onboarding request has been saved and confirmation email sent.',
     };
+  }
+
+  async findPendingRequests() {
+    const rows = await this.prisma.adminRequest.findMany({
+      where: {
+        type: 'ONBOARDING',
+        status: AdminRequestStatus.PENDING,
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      user: {
+        id: row.user?.id || row.userId || '',
+        name: row.user?.name || 'Unnamed User',
+        email: row.user?.email || '',
+        phone: row.user?.phone || '',
+      },
+      businessDescription: row.message,
+      submittedAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  async rejectVendorRequest(requestId: string, reason?: string) {
+    const existing = await this.prisma.adminRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Vendor request not found.');
+    }
+
+    await this.prisma.adminRequest.update({
+      where: { id: requestId },
+      data: {
+        status: AdminRequestStatus.REJECTED,
+        ...(reason ? { adminNotes: reason } : {}),
+      },
+    });
+
+    const emailNotification = await this.safeSendEmail(
+      existing.user?.email,
+      'Vendor Onboarding Application Update - Ingeni Store',
+      `<h3>Hello ${existing.user?.name || 'Valued User'},</h3>
+       <p>Thank you for your interest in selling on Ingeni Store. After reviewing your application, your vendor onboarding request was not approved at this time.</p>
+       ${reason ? `<p><strong>Notes:</strong> ${reason}</p>` : ''}
+       <p>You may reach out to support or submit an updated request in the future.</p>`,
+      'onboarding-rejected',
+    );
+
+    return { success: true, emailNotification };
+  }
+
+  async approveVendorRequest(data: {
+    userId: string;
+    storeName: string;
+    description: string;
+    address: string;
+    phone: string;
+  }) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+    });
+    if (!user) {
+      throw new NotFoundException('Associated user account not found.');
+    }
+
+    const existingVendor = await this.prisma.vendor.findUnique({
+      where: { userId: data.userId },
+    });
+    if (existingVendor) {
+      throw new BadRequestException(
+        'A vendor profile already exists for this user account.',
+      );
+    }
+
+    return this.create({
+      storeName: data.storeName,
+      description: data.description,
+      address: data.address,
+      phone: data.phone,
+      userId: data.userId,
+    });
   }
 
   async getVendorFinancials(userId: string) {
@@ -195,7 +375,9 @@ export class VendorsService {
       );
 
       vendorItems.forEach((item) => {
-        const itemPrice = Number(item.priceAtPurchase || item.product.price || 0);
+        const itemPrice = Number(
+          item.priceAtPurchase || item.product.price || 0,
+        );
         const qty = Number(item.quantity || 1);
         const lineTotal = itemPrice * qty;
 
@@ -203,7 +385,8 @@ export class VendorsService {
 
         if (isPaid && isDelivered) {
           const storedEarnings = Number(item.vendorEarnings || 0);
-          const computedEarnings = storedEarnings > 0 ? storedEarnings : lineTotal * (1 - 0.08);
+          const computedEarnings =
+            storedEarnings > 0 ? storedEarnings : lineTotal * (1 - 0.08);
           rawNetEarnings += computedEarnings;
         }
       });
@@ -215,7 +398,7 @@ export class VendorsService {
     });
 
     const totalApprovedCashouts = requests
-      .filter((req) => req.type === 'CASHOUT' && req.status === 'APPROVED')
+      .filter((req) => req.type === 'CASHOUT' && req.status === 'RESOLVED')
       .reduce((sum, req) => sum + Number(req.amount || 0), 0);
 
     const netBalance = Math.max(0, rawNetEarnings - totalApprovedCashouts);
@@ -227,55 +410,6 @@ export class VendorsService {
     };
   }
 
-  async findPendingRequests() {
-    return this.pendingRequestsCache;
-  }
-
-  async rejectVendorRequest(requestId: string) {
-    this.pendingRequestsCache = this.pendingRequestsCache.filter((req) => req.id !== requestId);
-    return { success: true };
-  }
-
-  async approveVendorRequest(data: {
-    userId: string;
-    storeName: string;
-    description: string;
-    address: string;
-    phone: string;
-  }) {
-    const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
-    if (!user) {
-      throw new NotFoundException('Associated user account not found.');
-    }
-
-    const existingVendor = await this.prisma.vendor.findUnique({ where: { userId: data.userId } });
-    if (existingVendor) {
-      throw new BadRequestException('A vendor profile already exists for this user account.');
-    }
-
-    if (user.email) {
-      try {
-        await this.emailService.sendMail(
-          user.email,
-          'Your Vendor Profile Has Been Approved',
-          `<h3>Hello ${user.name},</h3>
-           <p>Congratulations! Your vendor profile for <strong>${data.storeName}</strong> has been approved.</p>
-           <p>You can now start listing your products and serving your customers.</p>`,
-        );
-      } catch (e) {
-        this.logger.error('Failed to email vendor on profile approval:', e);
-      }
-    }
-
-    return this.create({
-      storeName: data.storeName,
-      description: data.description,
-      address: data.address,
-      phone: data.phone,
-      userId: data.userId,
-    });
-  }
-
   async toggleVendorStatus(id: string, currentStatus: boolean) {
     const newStatus = !currentStatus;
     const vendor = await this.prisma.vendor.update({
@@ -284,7 +418,18 @@ export class VendorsService {
       include: { user: true },
     });
 
-    return vendor;
+    const emailNotification = await this.safeSendEmail(
+      vendor.user?.email,
+      `Storefront Status Updated (${newStatus ? 'Active' : 'Paused'}) - Ingeni Store`,
+      `<h3>Hello ${vendor.user?.name || 'Valued Partner'},</h3>
+       <p>The status of your store <strong>${vendor.storeName}</strong> has been set to <strong>${newStatus ? 'ACTIVE' : 'INACTIVE'}</strong>.</p>`,
+      'vendor-status-toggled',
+    );
+
+    return {
+      ...vendor,
+      emailNotification,
+    };
   }
 
   async update(identifier: string, data: any) {
@@ -306,11 +451,16 @@ export class VendorsService {
     }
 
     const updatedFields: string[] = [];
-    if (storeName !== undefined && storeName !== vendor.storeName) updatedFields.push('Store Name');
-    if (description !== undefined && description !== vendor.description) updatedFields.push('Description');
-    if (address !== undefined && address !== vendor.address) updatedFields.push('Address');
-    if (phone !== undefined && phone !== vendor.phone) updatedFields.push('Phone');
-    if (isActive !== undefined && isActive !== vendor.isActive) updatedFields.push('Store Status');
+    if (storeName !== undefined && storeName !== vendor.storeName)
+      updatedFields.push('Store Name');
+    if (description !== undefined && description !== vendor.description)
+      updatedFields.push('Description');
+    if (address !== undefined && address !== vendor.address)
+      updatedFields.push('Address');
+    if (phone !== undefined && phone !== vendor.phone)
+      updatedFields.push('Phone');
+    if (isActive !== undefined && isActive !== vendor.isActive)
+      updatedFields.push('Store Status');
 
     const updatedVendor = await this.prisma.vendor.update({
       where: { id: vendor.id },
@@ -335,15 +485,20 @@ export class VendorsService {
 
     if (recipientEmail) {
       try {
-        emailNotification = await this.emailService.sendVendorProfileUpdateAlert(
-          recipientEmail,
-          recipientName,
-          updatedVendor.storeName,
-          updatedFields,
-        );
+        emailNotification =
+          await this.emailService.sendVendorProfileUpdateAlert(
+            recipientEmail,
+            recipientName,
+            updatedVendor.storeName,
+            updatedFields,
+          );
       } catch (e) {
         this.logger.error('Failed to email vendor on profile update:', e);
-        emailNotification = { success: false, messageId: null, reason: 'SMTP dispatch error' };
+        emailNotification = {
+          success: false,
+          messageId: null,
+          reason: 'SMTP dispatch error',
+        };
       }
     }
 
@@ -354,7 +509,24 @@ export class VendorsService {
   }
 
   async remove(id: string) {
-    return this.prisma.vendor.delete({ where: { id } });
+    const existing = await this.prisma.vendor.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    const deleted = await this.prisma.vendor.delete({ where: { id } });
+
+    if (existing?.user?.email) {
+      await this.safeSendEmail(
+        existing.user.email,
+        `Vendor Profile Removed - Ingeni Store`,
+        `<h3>Hello ${existing.user.name || 'Valued Partner'},</h3>
+         <p>Your vendor profile for <strong>${existing.storeName}</strong> has been removed from Ingeni Store.</p>`,
+        'vendor-removed',
+      );
+    }
+
+    return deleted;
   }
 
   async getVendorMetrics(id: string) {
@@ -420,28 +592,18 @@ export class VendorsService {
     }
 
     const recipientEmail = request.vendor?.user?.email || request.user?.email;
-    const recipientName = request.vendor?.storeName || request.user?.name || 'Valued Partner';
+    const recipientName =
+      request.vendor?.storeName || request.user?.name || 'Valued Partner';
 
-    let emailNotification: EmailDispatchResult = {
-      success: false,
-      messageId: null,
-      reason: 'No recipient email available',
-    };
-
-    if (recipientEmail) {
-      try {
-        emailNotification = await this.emailService.sendMail(
-          recipientEmail,
-          `Update on your ${request.type} Request - Ingeni Store`,
-          `<h3>Hello ${recipientName},</h3>
-           <p>Your request regarding <strong>"${request.message}"</strong> has been updated to: <strong>${normalizedStatus}</strong>.</p>
-           ${adminNotes ? `<p><strong>Admin Note:</strong> ${adminNotes}</p>` : ''}`,
-        );
-      } catch (e) {
-        this.logger.error('Failed to email vendor/user on request status change:', e);
-        emailNotification = { success: false, messageId: null, reason: 'SMTP dispatch error' };
-      }
-    }
+    const emailNotification = await this.safeSendEmail(
+      recipientEmail,
+      `Update on your ${request.type} Request - Ingeni Store`,
+      `<h3>Hello ${recipientName},</h3>
+       <p>Your request regarding <strong>"${request.message}"</strong> has been updated to: <strong>${normalizedStatus}</strong>.</p>
+       ${request.amount ? `<p><strong>Amount:</strong> RWF ${Number(request.amount).toLocaleString()}</p>` : ''}
+       ${adminNotes ? `<p><strong>Admin Note:</strong> ${adminNotes}</p>` : ''}`,
+      'admin-request-status-updated',
+    );
 
     return {
       ...updated,
@@ -452,15 +614,36 @@ export class VendorsService {
   async deleteAdminRequest(id: string) {
     const request = await this.prisma.adminRequest.findUnique({
       where: { id },
+      include: {
+        vendor: { include: { user: true } },
+        user: true,
+      },
     });
 
     if (!request) {
       throw new NotFoundException('Admin request record not found.');
     }
 
-    return this.prisma.adminRequest.delete({
+    const deleted = await this.prisma.adminRequest.delete({
       where: { id },
     });
+
+    const recipientEmail = request.vendor?.user?.email || request.user?.email;
+    const recipientName =
+      request.vendor?.storeName || request.user?.name || 'Valued Partner';
+
+    const emailNotification = await this.safeSendEmail(
+      recipientEmail,
+      `${request.type} Request Archived - Ingeni Store`,
+      `<h3>Hello ${recipientName},</h3>
+       <p>Your ${request.type} request (<strong>"${request.message}"</strong>) has been archived/closed by the administration team.</p>`,
+      'admin-request-deleted',
+    );
+
+    return {
+      ...deleted,
+      emailNotification,
+    };
   }
 
   async findVendorOrders(vendorId?: string) {
@@ -493,10 +676,40 @@ export class VendorsService {
   }
 
   async updateOrderStatus(orderId: string, status: string) {
-    return this.prisma.order.update({
+    const updatedOrder = await this.prisma.order.update({
       where: { id: orderId },
       data: { status: status as OrderStatus },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: { vendor: { include: { user: true } } },
+            },
+          },
+        },
+      },
     });
+
+    const notifiedEmails = new Set<string>();
+    for (const item of updatedOrder.items || []) {
+      const vendorEmail = item.product?.vendor?.user?.email;
+      const vendorName =
+        item.product?.vendor?.storeName ||
+        item.product?.vendor?.user?.name ||
+        'Vendor';
+      if (vendorEmail && !notifiedEmails.has(vendorEmail)) {
+        notifiedEmails.add(vendorEmail);
+        await this.safeSendEmail(
+          vendorEmail,
+          `Order #${updatedOrder.orderNumber || updatedOrder.id} Status: ${status} - Ingeni Store`,
+          `<h3>Hello ${vendorName},</h3>
+           <p>Order <strong>${updatedOrder.orderNumber || updatedOrder.id}</strong> containing your product <strong>${item.product?.title || 'Item'}</strong> is now <strong>${status}</strong>.</p>`,
+          'order-status-vendor-alert',
+        );
+      }
+    }
+
+    return updatedOrder;
   }
 
   async getSettings(userId: string) {
@@ -539,7 +752,9 @@ export class VendorsService {
   async updateSettings(userId: string, payload: any) {
     const vendor = await this.getVendorById(userId);
     if (!vendor) {
-      throw new NotFoundException('Vendor profile not found for this user account.');
+      throw new NotFoundException(
+        'Vendor profile not found for this user account.',
+      );
     }
 
     const cleanPhone = payload.phone?.trim() || null;
@@ -585,7 +800,7 @@ export class VendorsService {
       canUpdateUserEmail = !emailOwner;
     }
 
-    return await this.prisma.$transaction(async (tx) => {
+    const updatedSettings = await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: vendor.userId },
         data: {
@@ -598,7 +813,8 @@ export class VendorsService {
       await tx.vendor.update({
         where: { id: vendor.id },
         data: {
-          ...(canUpdateStoreName && cleanStoreName && { storeName: cleanStoreName }),
+          ...(canUpdateStoreName &&
+            cleanStoreName && { storeName: cleanStoreName }),
           ...(cleanPhone && { phone: cleanPhone }),
         },
       });
@@ -606,7 +822,10 @@ export class VendorsService {
       return await tx.vendorSettings.upsert({
         where: { vendorId: vendor.id },
         update: {
-          storeName: canUpdateStoreName && cleanStoreName ? cleanStoreName : vendor.storeName,
+          storeName:
+            canUpdateStoreName && cleanStoreName
+              ? cleanStoreName
+              : vendor.storeName,
           ownerName: cleanOwnerName ?? vendor.user?.name ?? '',
           supportEmail: cleanEmail ?? vendor.user?.email ?? '',
           phone: cleanPhone ?? vendor.phone ?? '',
@@ -621,7 +840,8 @@ export class VendorsService {
             canUpdateStoreName && cleanStoreName
               ? cleanStoreName
               : vendor.storeName || 'Ingeni Store',
-          ownerName: cleanOwnerName || vendor.user?.name || 'Ingeni Store Representative',
+          ownerName:
+            cleanOwnerName || vendor.user?.name || 'Ingeni Store Representative',
           supportEmail: cleanEmail || vendor.user?.email || 'support@ingenistore.rw',
           phone: cleanPhone || vendor.phone || '+250728680460',
           momoNumber: payload.momoNumber?.trim() || cleanPhone || '+250728680460',
@@ -631,14 +851,31 @@ export class VendorsService {
         },
       });
     });
+
+    const notifyTarget = cleanEmail || vendor.user?.email;
+    const emailNotification = await this.safeSendEmail(
+      notifyTarget,
+      'Storefront Settings Updated - Ingeni Store',
+      `<h3>Hello ${cleanOwnerName || vendor.user?.name || 'Valued Partner'},</h3>
+       <p>Your store settings for <strong>${updatedSettings.storeName}</strong> have been updated.</p>`,
+      'vendor-settings-updated',
+    );
+
+    return {
+      ...updatedSettings,
+      emailNotification,
+    };
   }
 
   async submitAdminRequest(
     userId: string,
     payload: { type: string; amount?: string; message: string },
   ) {
-    if (!payload.message) {
-      throw new BadRequestException('Message parameter is required for admin communication.');
+    const cleanMessage = payload?.message?.trim();
+    if (!cleanMessage) {
+      throw new BadRequestException(
+        'Message parameter is required for admin communication.',
+      );
     }
 
     const vendor = await this.prisma.vendor
@@ -647,23 +884,45 @@ export class VendorsService {
       })
       .catch(() => null);
 
-    return this.prisma.adminRequest.create({
+    const requestType =
+      payload.type?.trim() || (vendor ? 'SUPPORT' : 'SELLER_REQUEST');
+
+    const created = await this.prisma.adminRequest.create({
       data: {
         vendorId: vendor ? vendor.id : null,
         userId: userId,
-        type: payload.type || 'CASHOUT',
+        type: requestType,
         amount: payload.amount ? String(payload.amount) : null,
-        message: payload.message,
-        status: 'PENDING',
+        message: cleanMessage,
+        status: AdminRequestStatus.PENDING,
+      },
+      include: {
+        vendor: { select: { storeName: true, phone: true } },
+        user: { select: { id: true, name: true, email: true, phone: true } },
       },
     });
+
+    const emailNotification = await this.safeSendEmail(
+      created.user?.email,
+      `${requestType} Request Submitted - Ingeni Store`,
+      `<h3>Hello ${created.user?.name || 'Valued User'},</h3>
+       <p>Your <strong>${requestType}</strong> request has been submitted and is currently <strong>PENDING</strong> review.</p>
+       ${created.amount ? `<p><strong>Amount:</strong> RWF ${Number(created.amount).toLocaleString()}</p>` : ''}
+       <p><strong>Message:</strong> ${cleanMessage}</p>`,
+      'admin-request-created',
+    );
+
+    return {
+      ...created,
+      emailNotification,
+    };
   }
 
   async findAllAdminRequests() {
     return this.prisma.adminRequest.findMany({
       include: {
         vendor: { select: { storeName: true, phone: true } },
-        user: { select: { name: true, email: true, phone: true } },
+        user: { select: { id: true, name: true, email: true, phone: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

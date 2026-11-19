@@ -39,12 +39,30 @@ model User {
   adminRequests  AdminRequest[]
 
   vendor Vendor?
+  subscriber  Subscriber?
 
   invitations Invitation[]
   members     Member[]
   reviews     ProductReview[]
 
   @@map("user")
+}
+
+model Subscriber {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  name             String?
+  userId           String?  @unique
+  isActive         Boolean  @default(true) @map("is_active")
+  source           String   @default("footer") // "footer" | "account" | "checkout"
+  unsubscribeToken String   @unique @default(uuid()) @map("unsubscribe_token")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([isActive])
+  @@map("newsletter_subscriber")
 }
 
 ////////////////////////////////////////////////////

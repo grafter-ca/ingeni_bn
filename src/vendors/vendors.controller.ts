@@ -1,4 +1,3 @@
-// src/vendors/vendors.controller.ts
 import {
   Controller,
   Get,
@@ -36,7 +35,7 @@ export class VendorsController {
   @Post('request-onboarding')
   @UseGuards(RolesGuard)
   async requestOnboarding(
-    @Body() dto: { businessDescription: string },
+    @Body() dto: { businessDescription?: string; message?: string },
     @Req() req: any,
   ) {
     const currentUser = req.user || req.session?.user || req.auth;
@@ -45,13 +44,18 @@ export class VendorsController {
       throw new BadRequestException('User session not found on request.');
     }
 
+    const description = (dto.businessDescription || dto.message || '').trim();
+    if (!description) {
+      throw new BadRequestException('Business description or message is required.');
+    }
+
     return this.vendorsService.requestOnboarding(
       {
         id: currentUser.id || currentUser.sub,
         name: currentUser.name,
         email: currentUser.email,
       },
-      dto.businessDescription,
+      description,
     );
   }
 
@@ -88,14 +92,18 @@ export class VendorsController {
   }
 
   @Patch('settings')
-@UseGuards(RolesGuard)
-@Roles(['admin', 'vendor'])
-async updateSettings(@Req() req: any, @Body() payload: Record<string, any>) {
-  const userId = this.getUserId(req);
-  // Strip read-only metadata fields in case the client sends the whole settings object
-  const { id, vendorId, updatedAt, createdAt, ...cleanPayload } = payload || {};
-  return this.vendorsService.updateSettings(userId, cleanPayload);
-}
+  @UseGuards(RolesGuard)
+  @Roles(['admin', 'vendor'])
+  async updateSettings(
+    @Req() req: any,
+    @Body() payload: Record<string, any>,
+  ) {
+    const userId = this.getUserId(req);
+    // Strip read-only metadata fields in case the client sends the whole settings object
+    const { id, vendorId, updatedAt, createdAt, ...cleanPayload } =
+      payload || {};
+    return this.vendorsService.updateSettings(userId, cleanPayload);
+  }
 
   // --- METRICS & ORDERS ---
   @Get('metrics')
@@ -112,7 +120,7 @@ async updateSettings(@Req() req: any, @Body() payload: Record<string, any>) {
     return this.vendorsService.findVendorOrders(this.getUserId(req));
   }
 
-  // --- ADMIN / CASHOUT TICKET REQUESTS ---
+  // --- ADMIN / SELLER / CASHOUT TICKET REQUESTS ---
   @Get('admin-requests')
   @UseGuards(RolesGuard)
   @Roles(['admin'])
@@ -122,12 +130,21 @@ async updateSettings(@Req() req: any, @Body() payload: Record<string, any>) {
 
   @Post('admin-request')
   @UseGuards(RolesGuard)
-  @Roles(['vendor'])
+  @Roles(['user', 'vendor', 'admin'])
   async submitAdminRequest(
     @Req() req: any,
-    @Body() payload: { type: string; amount?: string; message: string },
+    @Body() payload: { type?: string; amount?: string; message?: string },
   ) {
-    return this.vendorsService.submitAdminRequest(this.getUserId(req), payload);
+    const message = (payload?.message || '').trim();
+    if (!message) {
+      throw new BadRequestException('Message is required when submitting a request.');
+    }
+
+    return this.vendorsService.submitAdminRequest(this.getUserId(req), {
+      type: payload?.type || 'SELLER_REQUEST',
+      amount: payload?.amount,
+      message,
+    });
   }
 
   // --- ROOT COLLECTION ENDPOINTS ---
@@ -165,7 +182,7 @@ async updateSettings(@Req() req: any, @Body() payload: Record<string, any>) {
     return this.vendorsService.updateOrderStatus(orderId, status);
   }
 
-@Patch('admin-requests/:id')
+  @Patch('admin-requests/:id')
   @UseGuards(RolesGuard)
   @Roles(['admin'])
   async updateAdminRequestStatus(
@@ -216,18 +233,19 @@ async updateSettings(@Req() req: any, @Body() payload: Record<string, any>) {
       message?: string;
     },
   ) {
-   const cleanPhone = body.phone && body.phone !== 'undefined' && body.phone.trim() !== '' 
-      ? body.phone 
-      : 'Registered MoMo';
+    const cleanPhone =
+      body.phone && body.phone !== 'undefined' && body.phone.trim() !== ''
+        ? body.phone
+        : 'Registered MoMo';
 
     return this.vendorsService.submitAdminRequest(vendorId, {
       type: body.type || 'CASHOUT',
       amount: String(body.amount),
       message:
-        body.message ||
-        `Cashout request to MoMo number: ${cleanPhone}`,
+        body.message || `Cashout request to MoMo number: ${cleanPhone}`,
     });
   }
+
   @Patch(':id/toggle-status')
   @UseGuards(RolesGuard)
   @Roles(['admin'])

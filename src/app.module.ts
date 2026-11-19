@@ -18,6 +18,7 @@ import { HealthController } from './health/health.controller.js';
 import { HealthModule } from './health/health.module.js';
 import { EventsModule } from './events/events.module.js';
 import { AdminModule } from './admin/admin.module.js';
+import { SubscribersModule } from './subscribers/subscribers.module.js';
 
 @Module({
   imports: [
@@ -45,7 +46,8 @@ import { AdminModule } from './admin/admin.module.js';
     AnalyticsModule,
     HealthModule,
     EventsModule,
-    AdminModule
+    AdminModule,
+    SubscribersModule,
   ],
   controllers: [HealthController],
   providers: [OrderService, HealthService],
