@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 
 export interface EmailDispatchResult {
@@ -28,14 +32,21 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
+    const isSecure = process.env.SMTP_SECURE
+      ? process.env.SMTP_SECURE === 'true'
+      : true;
+
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: Number(process.env.SMTP_PORT || 465),
-      secure: process.env.SMTP_SECURE === 'true',
+      secure: isSecure,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 8000),
+      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 8000),
+      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 12000),
       tls: {
         rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED === 'true',
       },
@@ -48,6 +59,15 @@ export class EmailService {
     ).replace(/\/+$/, '');
 
     return rawBase.endsWith('/api') ? rawBase : `${rawBase}/api`;
+  }
+
+  private resolveFrontendBaseUrl(): string {
+    const isProd = process.env.NODE_ENV === 'production';
+    return (
+      process.env.FRONTEND_URL ||
+      process.env.VITE_FRONTEND_URL ||
+      (isProd ? 'https://ingeni.onrender.com' : 'http://localhost:5173')
+    ).replace(/\/+$/, '');
   }
 
   buildUnsubscribeUrl(token?: string | null): string {
@@ -101,6 +121,69 @@ export class EmailService {
     }
   }
 
+  /**
+   * Non-blocking fire-and-forget dispatcher for auth & signup flows
+   */
+  sendInBackground(to: string, subject: string, htmlContent: string): void {
+    this.sendMail(to, subject, htmlContent).catch((err) => {
+      this.logger.error(
+        `Background email dispatch failed | to=${to} | subject="${subject}" | error=${err?.message || err}`,
+      );
+    });
+  }
+
+  // --- EMAIL TEMPLATE: ACCOUNT VERIFICATION (NON-BLOCKING OPTION) ---
+  queueVerificationEmail(
+    recipientEmail: string,
+    recipientName: string,
+    verificationUrl: string,
+  ): void {
+    const subject = 'Verify your Ingeni Market account';
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; padding: 22px; border-radius: 10px; color: #111;">
+        <h2 style="color: #2563eb; margin-top: 0;">Welcome to Ingeni Market, ${recipientName || 'Shopper'}!</h2>
+        <p>Click the button below to verify your email address and activate your account.</p>
+        <p style="margin: 20px 0;">
+          <a href="${verificationUrl}" style="background: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">
+            Verify Email
+          </a>
+        </p>
+        <div style="margin-top: 24px; font-size: 12px; color: #666;">
+          <p>Or copy and paste this link into your browser:</p>
+          <p><a href="${verificationUrl}" style="color: #2563eb; word-break: break-all;">${verificationUrl}</a></p>
+        </div>
+      </div>
+    `;
+    this.sendInBackground(recipientEmail, subject, html);
+  }
+
+  // --- EMAIL TEMPLATE: PASSWORD RESET (NON-BLOCKING OPTION) ---
+  queuePasswordResetEmail(
+    recipientEmail: string,
+    recipientName: string,
+    resetUrl: string,
+  ): void {
+    const subject = 'Reset your Ingeni Market password';
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; padding: 22px; border-radius: 10px; color: #111;">
+        <h2 style="color: #2563eb; margin-top: 0;">Reset Your Ingeni Market Password</h2>
+        <p>Hello ${recipientName || 'there'},</p>
+        <p>We received a request to reset your password. Click the button below to choose a new password:</p>
+        <p style="margin: 20px 0;">
+          <a href="${resetUrl}" style="background: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">
+            Reset Password
+          </a>
+        </p>
+        <p style="font-size: 13px; color: #4b5563;">If you did not request a password reset, you can safely ignore this email.</p>
+        <div style="margin-top: 24px; font-size: 12px; color: #666;">
+          <p>Or copy and paste this link into your browser:</p>
+          <p><a href="${resetUrl}" style="color: #2563eb; word-break: break-all;">${resetUrl}</a></p>
+        </div>
+      </div>
+    `;
+    this.sendInBackground(recipientEmail, subject, html);
+  }
+
   // --- EMAIL TEMPLATE: NEWSLETTER SUBSCRIPTION WELCOME + UNSUBSCRIBE ---
   async sendSubscriptionWelcomeEmail(
     recipientEmail: string,
@@ -130,9 +213,7 @@ export class EmailService {
     product: NewProductAlertPayload,
     unsubscribeUrl: string,
   ): Promise<EmailDispatchResult> {
-    const baseUrl = (
-      process.env.FRONTEND_URL || 'http://localhost:5173'
-    ).replace(/\/+$/, '');
+    const baseUrl = this.resolveFrontendBaseUrl();
     const productUrl = `${baseUrl}/products/${product.productSlug}`;
     const subject = `🆕 New on Ingeni Market: ${product.productTitle}`;
 
@@ -310,6 +391,7 @@ export class EmailService {
     businessDescription: string,
   ) {
     const adminEmail = process.env.SMTP_USER as string;
+    const frontendBase = this.resolveFrontendBaseUrl();
     const subject = `🆕 New Vendor Onboarding Request: ${userName}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #d1d5db; border-radius: 8px;">
@@ -321,7 +403,7 @@ export class EmailService {
           <p><strong>Business Context:</strong><br>${businessDescription}</p>
         </div>
         <p style="margin-top: 20px;">
-          <a href="${process.env.ADMIN_DASHBOARD_URL || 'http://localhost:5173/admin/vendors'}" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Review in Admin Panel</a>
+          <a href="${process.env.ADMIN_DASHBOARD_URL || `${frontendBase}/admin/vendors`}" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Review in Admin Panel</a>
         </p>
       </div>
     `;
