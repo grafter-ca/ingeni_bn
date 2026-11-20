@@ -169,42 +169,52 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       },
     },
 
-    emailVerification: {
+emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
-      callbackURL: `${frontendBase}/verify-email`,
 
-      sendVerificationEmail: async ({ user, url }) => {
+      sendVerificationEmail: async ({ user, url, token }) => {
         try {
-          const parsedUrl = new URL(url);
-          const token = parsedUrl.searchParams.get("token");
+          let verificationToken = token || "";
+          if (!verificationToken && url) {
+            try {
+              const parsedUrl = new URL(
+                url,
+                process.env.BETTER_AUTH_URL || "http://localhost:8000",
+              );
+              verificationToken = parsedUrl.searchParams.get("token") || "";
+            } catch {
+              verificationToken = "";
+            }
+          }
 
-          const frontendVerificationLink = token
-            ? `${frontendBase}/verify-email?token=${encodeURIComponent(token)}`
+          const frontendVerificationLink = verificationToken
+            ? `${frontendBase}/verify-email?token=${encodeURIComponent(verificationToken)}`
             : url;
 
           console.log(`📩 Dispatching verification email to: ${user.email}`);
 
-          const mailOptions = {
+          const info = await transporter.sendMail({
             from: `"Ingeni Market Support" <${smtpUser}>`,
             to: user.email,
             subject: "Verify your Ingeni Market account",
             html: `
               <div style="font-family: sans-serif; max-width: 600px; padding: 20px; color: #111; border: 1px solid #e5e7eb; border-radius: 10px;">
-                <h2 style="color: #2563eb; margin-top: 0;">Welcome to Ingeni Market, ${user.name}!</h2>
+                <h2 style="color: #2563eb; margin-top: 0;">Welcome to Ingeni Market, ${user.name || "there"}!</h2>
                 <p>Click the button below to verify your email and activate your account.</p>
-                <a href="${frontendVerificationLink}" style="background: #2563eb; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">
-                  Verify Email
-                </a>
+                <p style="margin: 20px 0;">
+                  <a href="${frontendVerificationLink}" style="background: #2563eb; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">
+                    Verify Email
+                  </a>
+                </p>
                 <div style="margin-top: 24px; font-size: 12px; color: #666;">
                   <p>Or copy and paste this link into your browser:</p>
                   <p><a href="${frontendVerificationLink}" style="color: #2563eb;">${frontendVerificationLink}</a></p>
                 </div>
               </div>
             `,
-          };
+          });
 
-          const info = await transporter.sendMail(mailOptions);
           console.log(
             "✅ Verification email sent successfully. MessageID:",
             info.messageId,
