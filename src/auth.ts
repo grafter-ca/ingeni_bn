@@ -8,43 +8,31 @@ import {
   lastLoginMethod,
 } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import nodemailer from "nodemailer";
 import { PrismaClient } from "../generated/prisma/client.js";
+import { EmailService } from "./libs/nodemail/email.service.js";
 
-export const getAuthConfiguration = (prisma: PrismaClient) => {
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
+const extractTokenFromUrl = (url?: string): string => {
+  if (!url) return "";
+  try {
+    const parsed = new URL(
+      url,
+      process.env.BETTER_AUTH_URL || "http://localhost:8000",
+    );
+    return parsed.searchParams.get("token") || "";
+  } catch {
+    return "";
+  }
+};
 
-  if (!smtpUser || !smtpPass) {
+export const getAuthConfiguration = (
+  prisma: PrismaClient,
+  emailService: EmailService = new EmailService(),
+) => {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
     console.warn(
       "⚠️ Warning: SMTP_USER or SMTP_PASS environment variables are missing. Email delivery will fail.",
     );
   }
-
-  const isSecure = process.env.SMTP_SECURE
-    ? process.env.SMTP_SECURE === "true"
-    : true;
-
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: isSecure,
-    auth: {
-      user: smtpUser,
-      pass: smtpPass,
-    },
-    tls: {
-      rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED === "true",
-    },
-  });
-
-  transporter.verify((error) => {
-    if (error) {
-      console.error("❌ SMTP Transporter Verification Error:", error);
-    } else {
-      console.log("✅ SMTP Server is ready to send emails");
-    }
-  });
 
   const isProd = process.env.NODE_ENV === "production";
 
@@ -101,50 +89,17 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       revokeSessionsOnPasswordReset: true,
 
       sendResetPassword: async ({ user, url, token }) => {
-        try {
-          let resetToken = token;
-          if (!resetToken) {
-            try {
-              const parsed = new URL(url);
-              resetToken = parsed.searchParams.get("token") || "";
-            } catch {
-              resetToken = "";
-            }
-          }
+        const resetToken = token || extractTokenFromUrl(url);
+        const resetLink = resetToken
+          ? `${frontendBase}/reset-password?token=${encodeURIComponent(resetToken)}`
+          : url;
 
-          const resetLink = resetToken
-            ? `${frontendBase}/reset-password?token=${encodeURIComponent(resetToken)}`
-            : url;
-
-          console.log(`📩 Dispatching password reset email to: ${user.email}`);
-
-          await transporter.sendMail({
-            from: `"Ingeni Market Support" <${smtpUser}>`,
-            to: user.email,
-            subject: "Reset your Ingeni Market password",
-            html: `
-              <div style="font-family: sans-serif; max-width: 600px; padding: 20px; color: #111; border: 1px solid #e5e7eb; border-radius: 10px;">
-                <h2 style="color: #2563eb; margin-top: 0;">Reset Your Ingeni Market Password</h2>
-                <p>Hello ${user.name || "there"},</p>
-                <p>We received a request to reset your password. Click the button below to choose a new password:</p>
-                <p style="margin: 20px 0;">
-                  <a href="${resetLink}" style="background: #2563eb; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">
-                    Reset Password
-                  </a>
-                </p>
-                <p style="font-size: 13px; color: #4b5563;">If you did not request a password reset, you can safely ignore this email.</p>
-                <div style="margin-top: 24px; font-size: 12px; color: #666;">
-                  <p>Or copy and paste this link into your browser:</p>
-                  <p><a href="${resetLink}" style="color: #2563eb;">${resetLink}</a></p>
-                </div>
-              </div>
-            `,
-          });
-
-          console.log("✅ Password reset email sent successfully to:", user.email);
-        } catch (err) {
-          console.error("❌ Failed to send password reset email:", err);
-        }
+        console.log(`📩 Queuing password reset email to: ${user.email}`);
+        emailService.queuePasswordResetEmail(
+          user.email,
+          user.name || "there",
+          resetLink,
+        );
       },
     },
 
@@ -158,6 +113,9 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
         secure: isProd,
         httpOnly: true,
       },
+      ipAddress: {
+        ipAddressHeaders: ["x-forwarded-for", "cf-connecting-ip"],
+      },
     },
 
     session: {
@@ -169,59 +127,22 @@ export const getAuthConfiguration = (prisma: PrismaClient) => {
       },
     },
 
-emailVerification: {
+    emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
 
       sendVerificationEmail: async ({ user, url, token }) => {
-        try {
-          let verificationToken = token || "";
-          if (!verificationToken && url) {
-            try {
-              const parsedUrl = new URL(
-                url,
-                process.env.BETTER_AUTH_URL || "http://localhost:8000",
-              );
-              verificationToken = parsedUrl.searchParams.get("token") || "";
-            } catch {
-              verificationToken = "";
-            }
-          }
+        const verificationToken = token || extractTokenFromUrl(url);
+        const frontendVerificationLink = verificationToken
+          ? `${frontendBase}/verify-email?token=${encodeURIComponent(verificationToken)}`
+          : url;
 
-          const frontendVerificationLink = verificationToken
-            ? `${frontendBase}/verify-email?token=${encodeURIComponent(verificationToken)}`
-            : url;
-
-          console.log(`📩 Dispatching verification email to: ${user.email}`);
-
-          const info = await transporter.sendMail({
-            from: `"Ingeni Market Support" <${smtpUser}>`,
-            to: user.email,
-            subject: "Verify your Ingeni Market account",
-            html: `
-              <div style="font-family: sans-serif; max-width: 600px; padding: 20px; color: #111; border: 1px solid #e5e7eb; border-radius: 10px;">
-                <h2 style="color: #2563eb; margin-top: 0;">Welcome to Ingeni Market, ${user.name || "there"}!</h2>
-                <p>Click the button below to verify your email and activate your account.</p>
-                <p style="margin: 20px 0;">
-                  <a href="${frontendVerificationLink}" style="background: #2563eb; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">
-                    Verify Email
-                  </a>
-                </p>
-                <div style="margin-top: 24px; font-size: 12px; color: #666;">
-                  <p>Or copy and paste this link into your browser:</p>
-                  <p><a href="${frontendVerificationLink}" style="color: #2563eb;">${frontendVerificationLink}</a></p>
-                </div>
-              </div>
-            `,
-          });
-
-          console.log(
-            "✅ Verification email sent successfully. MessageID:",
-            info.messageId,
-          );
-        } catch (err) {
-          console.error("❌ Failed to send verification email:", err);
-        }
+        console.log(`📩 Queuing verification email to: ${user.email}`);
+        emailService.queueVerificationEmail(
+          user.email,
+          user.name || "Shopper",
+          frontendVerificationLink,
+        );
       },
     },
 
