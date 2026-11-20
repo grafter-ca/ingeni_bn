@@ -32,23 +32,31 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
+    const port = Number(process.env.SMTP_PORT || 587);
     const isSecure = process.env.SMTP_SECURE
       ? process.env.SMTP_SECURE === 'true'
-      : true;
+      : port === 465;
 
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(process.env.SMTP_PORT || 465),
+      port,
       secure: isSecure,
+      requireTLS:
+        process.env.SMTP_REQUIRE_TLS !== undefined
+          ? process.env.SMTP_REQUIRE_TLS === 'true'
+          : !isSecure,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 8000),
-      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 8000),
-      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 12000),
+      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 10000),
+      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 10000),
+      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 15000),
       tls: {
-        rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED === 'true',
+        rejectUnauthorized:
+          process.env.SMTP_REJECT_UNAUTHORIZED !== undefined
+            ? process.env.SMTP_REJECT_UNAUTHORIZED === 'true'
+            : true,
       },
     });
   }
@@ -79,7 +87,7 @@ export class EmailService {
   }
 
   /**
-   * Core execution method to dispatch raw mail payloads
+   * Core execution method to dispatch raw mail payloads via Nodemailer
    */
   async sendMail(
     to: string,
@@ -132,7 +140,6 @@ export class EmailService {
     });
   }
 
-  // --- EMAIL TEMPLATE: ACCOUNT VERIFICATION (NON-BLOCKING OPTION) ---
   queueVerificationEmail(
     recipientEmail: string,
     recipientName: string,
@@ -157,7 +164,6 @@ export class EmailService {
     this.sendInBackground(recipientEmail, subject, html);
   }
 
-  // --- EMAIL TEMPLATE: PASSWORD RESET (NON-BLOCKING OPTION) ---
   queuePasswordResetEmail(
     recipientEmail: string,
     recipientName: string,
@@ -184,7 +190,6 @@ export class EmailService {
     this.sendInBackground(recipientEmail, subject, html);
   }
 
-  // --- EMAIL TEMPLATE: NEWSLETTER SUBSCRIPTION WELCOME + UNSUBSCRIBE ---
   async sendSubscriptionWelcomeEmail(
     recipientEmail: string,
     recipientName: string,
@@ -206,7 +211,6 @@ export class EmailService {
     return this.sendMail(recipientEmail, subject, html);
   }
 
-  // --- EMAIL TEMPLATE: NEW PRODUCT ALERT FOR SUBSCRIBERS + UNSUBSCRIBE ---
   async sendNewProductMarketAlert(
     recipientEmail: string,
     recipientName: string,
@@ -243,7 +247,6 @@ export class EmailService {
     return this.sendMail(recipientEmail, subject, html);
   }
 
-  // --- BROADCAST NEW PRODUCT ALERT TO ACTIVE SUBSCRIBERS ---
   async broadcastNewProductToSubscribers(
     subscribers: SubscriberRecipient[],
     product: NewProductAlertPayload,
@@ -279,7 +282,6 @@ export class EmailService {
     return { sent, failed };
   }
 
-  // --- EMAIL TEMPLATE: VENDOR PROFILE / STORE UPDATE ALERT ---
   async sendVendorProfileUpdateAlert(
     vendorEmail: string,
     recipientName: string,
@@ -308,7 +310,6 @@ export class EmailService {
     return this.sendMail(vendorEmail, subject, html);
   }
 
-  // --- EMAIL TEMPLATE: PRODUCT CREATION CONFIRMATION ---
   async sendProductCreationAlert(
     vendorEmail: string,
     vendorName: string,
@@ -329,7 +330,6 @@ export class EmailService {
     return this.sendMail(vendorEmail, subject, html);
   }
 
-  // --- EMAIL TEMPLATE: PRODUCT MODIFICATION NOTIFICATION ---
   async sendProductUpdateAlert(
     vendorEmail: string,
     vendorName: string,
@@ -350,7 +350,6 @@ export class EmailService {
     return this.sendMail(vendorEmail, subject, html);
   }
 
-  // --- EMAIL TEMPLATE: VENDOR SECURITY INCIDENT DESK ---
   async sendSecurityIssueRequest(
     vendorEmail: string,
     storeName: string,
@@ -384,7 +383,6 @@ export class EmailService {
     return this.sendMail(systemAdminEmail, subject, html);
   }
 
-  // --- EMAIL TEMPLATE: VENDOR ONBOARDING REQUEST ---
   async sendVendorOnboardingRequest(
     userName: string,
     userEmail: string,
