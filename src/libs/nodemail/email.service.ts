@@ -3,7 +3,6 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
 
 export interface EmailDispatchResult {
   success: boolean;
@@ -29,36 +28,29 @@ export interface SubscriberRecipient {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: nodemailer.Transporter;
 
   constructor() {
-    const port = Number(process.env.SMTP_PORT || 587);
-    const isSecure = process.env.SMTP_SECURE
-      ? process.env.SMTP_SECURE === 'true'
-      : port === 465;
+    if (!process.env.BREVO_API_KEY) {
+      this.logger.warn('⚠️ Warning: BREVO_API_KEY is missing.');
+    }
+    if (!process.env.SENDER_EMAIL) {
+      this.logger.warn('⚠️ Warning: SENDER_EMAIL is missing.');
+    }
+  }
 
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port,
-      secure: isSecure,
-      requireTLS:
-        process.env.SMTP_REQUIRE_TLS !== undefined
-          ? process.env.SMTP_REQUIRE_TLS === 'true'
-          : !isSecure,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 10000),
-      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 10000),
-      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 15000),
-      tls: {
-        rejectUnauthorized:
-          process.env.SMTP_REJECT_UNAUTHORIZED !== undefined
-            ? process.env.SMTP_REJECT_UNAUTHORIZED === 'true'
-            : true,
-      },
-    });
+  private getBrevoConfig(): { apiKey: string; senderEmail: string; senderName: string } {
+    const apiKey = (process.env.BREVO_API_KEY || '').trim();
+    const senderEmail = (process.env.SENDER_EMAIL || '').trim();
+    const senderName = (process.env.SENDER_NAME || 'Ingeni Market').trim();
+
+    if (!apiKey) {
+      throw new Error('BREVO_API_KEY is not configured in environment variables.');
+    }
+    if (!senderEmail) {
+      throw new Error('SENDER_EMAIL is not configured in environment variables.');
+    }
+
+    return { apiKey, senderEmail, senderName };
   }
 
   private resolveApiBaseUrl(): string {
@@ -87,7 +79,7 @@ export class EmailService {
   }
 
   /**
-   * Core execution method to dispatch raw mail payloads via Nodemailer
+   * Core execution method to dispatch mail payloads via Brevo Transactional Email API
    */
   async sendMail(
     to: string,
@@ -106,25 +98,54 @@ export class EmailService {
     }
 
     const cleanRecipient = to.trim();
-    const mailOptions = {
-      from: `"Ingeni Market" <${process.env.SMTP_USER}>`,
-      to: cleanRecipient,
-      subject,
-      html: htmlContent,
-    };
 
     try {
-      const info = await this.transporter.sendMail(mailOptions);
+      const { apiKey, senderEmail, senderName } = this.getBrevoConfig();
+
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          sender: {
+            name: senderName,
+            email: senderEmail,
+          },
+          to: [{ email: cleanRecipient }],
+          subject,
+          htmlContent,
+        }),
+      });
+
+      const rawBody = await response.text();
+      let parsed: any = {};
+      try {
+        parsed = rawBody ? JSON.parse(rawBody) : {};
+      } catch {
+        parsed = {};
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Brevo API error (${response.status}): ${parsed?.message || rawBody || response.statusText}`,
+        );
+      }
+
+      const messageId = parsed?.messageId || null;
       this.logger.log(
-        `Email accepted by SMTP | to=${cleanRecipient} | subject="${subject}" | messageId=${info.messageId}`,
+        `Email accepted by Brevo | to=${cleanRecipient} | subject="${subject}" | messageId=${messageId}`,
       );
-      return { success: true, messageId: info.messageId };
+      return { success: true, messageId };
     } catch (error: any) {
+      const errMsg = error?.message || String(error);
       this.logger.error(
-        `Email failed | to=${cleanRecipient} | subject="${subject}" | error=${error.message}`,
+        `Email failed | to=${cleanRecipient} | subject="${subject}" | error=${errMsg}`,
       );
       throw new InternalServerErrorException(
-        `Email pipeline breakdown: ${error.message}`,
+        `Email pipeline breakdown: ${errMsg}`,
       );
     }
   }
@@ -355,7 +376,11 @@ export class EmailService {
     storeName: string,
     issueDetails: string,
   ) {
-    const systemAdminEmail = process.env.SMTP_USER as string;
+    const systemAdminEmail = (
+      process.env.ADMIN_EMAIL ||
+      process.env.SENDER_EMAIL ||
+      ''
+    ).trim();
     const subject = `⚠️ CRITICAL: Security Issue Flagged by Vendor [${storeName}]`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 2px solid #DC2626; padding: 20px; border-radius: 8px;">
@@ -388,7 +413,11 @@ export class EmailService {
     userEmail: string,
     businessDescription: string,
   ) {
-    const adminEmail = process.env.SMTP_USER as string;
+    const adminEmail = (
+      process.env.ADMIN_EMAIL ||
+      process.env.SENDER_EMAIL ||
+      ''
+    ).trim();
     const frontendBase = this.resolveFrontendBaseUrl();
     const subject = `🆕 New Vendor Onboarding Request: ${userName}`;
     const html = `

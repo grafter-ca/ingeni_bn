@@ -28,9 +28,9 @@ export const getAuthConfiguration = (
   prisma: PrismaClient,
   emailService: EmailService = new EmailService(),
 ) => {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  if (!process.env.BREVO_API_KEY || !process.env.SENDER_EMAIL) {
     console.warn(
-      "⚠️ Warning: SMTP_USER or SMTP_PASS environment variables are missing. Email delivery will fail.",
+      "⚠️ Warning: BREVO_API_KEY or SENDER_EMAIL environment variables are missing. Email delivery will fail.",
     );
   }
 
@@ -42,13 +42,18 @@ export const getAuthConfiguration = (
     (isProd ? "https://ingeni.onrender.com" : "http://localhost:5173")
   ).replace(/\/+$/, "");
 
+  const authBaseUrl = (
+    process.env.BETTER_AUTH_URL ||
+    (isProd ? `${frontendBase}/api` : "http://localhost:8000")
+  ).replace(/\/+$/, "");
+
   return betterAuth({
     database: prismaAdapter(prisma, {
       provider: "postgresql",
     }),
 
     secret: process.env.BETTER_AUTH_SECRET,
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8000",
+    baseURL: authBaseUrl,
 
     trustedOrigins: [
       "http://localhost:3000",
@@ -109,9 +114,10 @@ export const getAuthConfiguration = (
       cookieSecure: isProd,
       useSecureCookies: isProd,
       defaultCookieAttributes: {
-        sameSite: isProd ? "none" : "lax",
+        sameSite: "lax",
         secure: isProd,
         httpOnly: true,
+        path: "/",
       },
       ipAddress: {
         ipAddressHeaders: ["x-forwarded-for", "cf-connecting-ip"],
