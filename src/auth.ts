@@ -109,9 +109,10 @@ export const getAuthConfiguration = (
       cookieSecure: isProd,
       useSecureCookies: isProd,
       defaultCookieAttributes: {
-        sameSite: isProd ? "none" : "lax",
+        sameSite: "lax",
         secure: isProd,
         httpOnly: true,
+        path: "/",
       },
       ipAddress: {
         ipAddressHeaders: ["x-forwarded-for", "cf-connecting-ip"],

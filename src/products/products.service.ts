@@ -508,6 +508,7 @@ export class ProductsService {
       await this.prisma.wishlist.delete({
         where: { id: existing.id },
       });
+
       return { status: false, message: 'Removed from wishlist' };
     } else {
       await this.prisma.wishlist.create({
