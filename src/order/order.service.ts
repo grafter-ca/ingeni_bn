@@ -288,10 +288,13 @@ export class OrderService {
     });
   }
 
-  async getVendorIdByUserId(userId: string) {
-    const vendor = await this.getVendorById(userId);
-    return vendor ? vendor.id : null;
-  }
+async getVendorIdByUserId(userId: string) {
+  const vendor = await this.prisma.vendor.findUnique({
+    where: { userId },
+    select: { id: true },
+  });
+  return vendor ? vendor.id : null;
+}
 
   async getOrdersForVendor(vendorId?: string) {
     return this.findVendorOrders(vendorId);

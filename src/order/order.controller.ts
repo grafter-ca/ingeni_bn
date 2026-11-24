@@ -1,22 +1,35 @@
 import {
-  Controller, Get, Post, Body, Param, Patch, Req, Query,
-  ForbiddenException, UseGuards,
-  NotFoundException
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Patch,
+  Req,
+  Query,
+  ForbiddenException,
+  UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 import { OrderService } from './order.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
-import { UserRole, OrderStatus, PaymentStatus } from '../../generated/prisma/client.js';
+import {
+  UserRole,
+  OrderStatus,
+  PaymentStatus,
+} from '../../generated/prisma/client.js';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 
 // Helper function to sanitize IDs to ensure database compatibility
-const clean = (id: string) => id.replace('local-', '').replace('fake-', '');
+const clean = (id: string) => id.replace(/^local-/, '').replace(/^fake-/, '');
 
 @Controller('orders')
 export class OrderController {
-  constructor(private readonly orderService: OrderService) { }
+  constructor(private readonly orderService: OrderService) {}
 
   // --- CREATE ORDER ---
+  @UseGuards(AuthGuard)
   @Post()
   async create(@Body() dto: CreateOrderDto, @Req() req: any) {
     const userId = req.user?.id;
@@ -24,10 +37,10 @@ export class OrderController {
     // Sanitize productId for every item in the order
     const sanitizedDto = {
       ...dto,
-      items: dto.items.map(item => ({
+      items: (dto.items || []).map((item) => ({
         ...item,
-        productId: clean(item.productId)
-      }))
+        productId: clean(item.productId),
+      })),
     };
 
     return this.orderService.createOrder(userId, sanitizedDto);
@@ -40,18 +53,21 @@ export class OrderController {
     return this.orderService.getOrdersByUser(req.user.id);
   }
 
-
   // --- VENDOR DASHBOARD ---
   @UseGuards(AuthGuard)
   @Get('vendor/dashboard')
   async getVendorOrders(@Req() req: any) {
     if (![UserRole.vendor, UserRole.admin].includes(req.user.role)) {
-      throw new ForbiddenException('Access limited to active marketplace vendors');
+      throw new ForbiddenException(
+        'Access limited to active marketplace vendors',
+      );
     }
 
     const vendorId = await this.orderService.getVendorIdByUserId(req.user.id);
     if (!vendorId) {
-      throw new NotFoundException('Vendor profile not found for this user account.');
+      throw new NotFoundException(
+        'Vendor profile not found for this user account.',
+      );
     }
 
     return this.orderService.getOrdersForVendor(vendorId);
@@ -62,7 +78,9 @@ export class OrderController {
   @Get('admin/all')
   async getAllOrders(@Req() req: any, @Query('status') status?: string) {
     if (req.user.role !== UserRole.admin) {
-      throw new ForbiddenException('Access restricted to administrative platform accounts');
+      throw new ForbiddenException(
+        'Access restricted to administrative platform accounts',
+      );
     }
     return this.orderService.getAllOrders(status);
   }
@@ -78,63 +96,73 @@ export class OrderController {
     const isVendor = req.user.role === UserRole.vendor;
 
     if (!isOwner && !isAdmin && !isVendor) {
-      throw new ForbiddenException('You do not have access to view this order transaction');
+      throw new ForbiddenException(
+        'You do not have access to view this order transaction',
+      );
     }
     return order;
   }
 
-// --- UPDATE PAYMENT STATUS ---
+  // --- UPDATE PAYMENT STATUS ---
   @UseGuards(AuthGuard)
   @Patch(':id/payment-status')
   async updatePaymentStatus(
     @Param('id') id: string,
     @Body('paymentStatus') paymentStatus: PaymentStatus,
-    @Req() req: any
+    @Req() req: any,
   ) {
-    // Allow both admins and vendors to update payment status
     if (![UserRole.admin, UserRole.vendor].includes(req.user.role)) {
-      throw new ForbiddenException('Only administrators and merchants can mutate payment statuses.');
+      throw new ForbiddenException(
+        'Only administrators and merchants can mutate payment statuses.',
+      );
     }
 
-    // Optional safety check for vendors: verify the vendor owns items in this order
     if (req.user.role === UserRole.vendor) {
       const vendorId = await this.orderService.getVendorIdByUserId(req.user.id);
       if (!vendorId) {
-        throw new NotFoundException('Vendor profile not found for this user account.');
+        throw new NotFoundException(
+          'Vendor profile not found for this user account.',
+        );
       }
       const order = await this.orderService.getOne(clean(id));
-      const hasVendorItem = order.items?.some((item: any) => item.vendorId === vendorId);
+      const hasVendorItem = order.items?.some(
+        (item: any) => item.vendorId === vendorId,
+      );
       if (!hasVendorItem) {
-        throw new ForbiddenException('You can only update payment status for orders containing your store products.');
+        throw new ForbiddenException(
+          'You can only update payment status for orders containing your store products.',
+        );
       }
     }
 
     return this.orderService.updatePaymentStatus(clean(id), paymentStatus);
   }
 
-  @Patch(':id/mark-cash-paid')
   @UseGuards(AuthGuard)
-  async markCashOrderAsPaid(
-    @Param('id') orderId: string,
-    @Req() req: any
-  ) {
+  @Patch(':id/mark-cash-paid')
+  async markCashOrderAsPaid(@Param('id') orderId: string, @Req() req: any) {
     const vendorId = await this.orderService.getVendorIdByUserId(req.user.id);
 
     if (!vendorId) {
-      throw new NotFoundException('Vendor profile not found for this user account.');
+      throw new NotFoundException(
+        'Vendor profile not found for this user account.',
+      );
     }
 
     return this.orderService.markCashOrderAsPaid(clean(orderId), vendorId);
   }
 
-  // Inside your OrderController file
   @UseGuards(AuthGuard)
   @Post(':id/payment-proof')
   async uploadPaymentProof(
     @Param('id') id: string,
-    @Body() body: { proofUrl: string; transactionReference?: string }
+    @Body() body: { proofUrl: string; transactionReference?: string },
   ) {
-    return this.orderService.submitPaymentProof(id, body.proofUrl, body.transactionReference);
+    return this.orderService.submitPaymentProof(
+      clean(id),
+      body.proofUrl,
+      body.transactionReference,
+    );
   }
 
   // --- UPDATE ORDER STATUS ---
@@ -143,11 +171,16 @@ export class OrderController {
   async updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateOrderStatusDto,
-    @Req() req: any
+    @Req() req: any,
   ) {
     if (![UserRole.admin, UserRole.vendor].includes(req.user.role)) {
-      throw new ForbiddenException('Status mutations require merchant or store staff role access');
+      throw new ForbiddenException(
+        'Status mutations require merchant or store staff role access',
+      );
     }
-    return this.orderService.updateStatus(clean(id), dto.status as OrderStatus);
+    return this.orderService.updateStatus(
+      clean(id),
+      dto.status as OrderStatus,
+    );
   }
 }
