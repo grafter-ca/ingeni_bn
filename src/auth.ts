@@ -51,8 +51,8 @@ export const getAuthConfiguration = (
     "",
   );
 
-  // Use SameSite=None + Secure when serving over HTTPS (production),
-  // and SameSite=Lax + Secure=false for local HTTP testing on PC/Android.
+  // Use SameSite=None + Secure over HTTPS (production/cross-site),
+  // and SameSite=Lax + Secure=false over plain HTTP (local PC/Android testing).
   const useCrossSiteHttpsCookies =
     isProd || authBaseUrl.startsWith("https://");
 
