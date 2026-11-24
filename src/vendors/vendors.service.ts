@@ -81,6 +81,8 @@ export class VendorsService {
     description?: string;
     address?: string;
     phone?: string;
+    momoCode?: string | null;
+    logoUrl?: string | null;
     user?: { id: string; name: string; email: string };
   }) {
     const user = await this.prisma.user.findUnique({
@@ -99,6 +101,9 @@ export class VendorsService {
       );
     }
 
+    const cleanMomoCode =
+      data.momoCode !== undefined ? data.momoCode?.trim() || null : undefined;
+
     const vendor = await this.prisma.$transaction(async (tx) => {
       const createdVendor = await tx.vendor.create({
         data: {
@@ -107,8 +112,10 @@ export class VendorsService {
           description: data.description,
           address: data.address,
           phone: data.phone,
+          ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }),
+          ...(cleanMomoCode !== undefined && { momoCode: cleanMomoCode }),
           isActive: true,
-        },
+        } as any,
         include: { user: true, products: true },
       });
 
@@ -314,6 +321,7 @@ export class VendorsService {
     description: string;
     address: string;
     phone: string;
+    momoCode?: string;
   }) {
     const user = await this.prisma.user.findUnique({
       where: { id: data.userId },
@@ -336,6 +344,7 @@ export class VendorsService {
       description: data.description,
       address: data.address,
       phone: data.phone,
+      momoCode: data.momoCode,
       userId: data.userId,
     });
   }
@@ -433,7 +442,15 @@ export class VendorsService {
   }
 
   async update(identifier: string, data: any) {
-    const { storeName, description, address, phone, isActive } = data;
+    const {
+      storeName,
+      description,
+      address,
+      phone,
+      momoCode,
+      logoUrl,
+      isActive,
+    } = data;
 
     let vendor = await this.prisma.vendor.findUnique({
       where: { id: identifier },
@@ -450,6 +467,11 @@ export class VendorsService {
       throw new NotFoundException('Vendor profile not found for update.');
     }
 
+    const cleanMomoCode =
+      momoCode !== undefined
+        ? String(momoCode || '').trim() || null
+        : undefined;
+
     const updatedFields: string[] = [];
     if (storeName !== undefined && storeName !== vendor.storeName)
       updatedFields.push('Store Name');
@@ -459,6 +481,13 @@ export class VendorsService {
       updatedFields.push('Address');
     if (phone !== undefined && phone !== vendor.phone)
       updatedFields.push('Phone');
+    if (
+      cleanMomoCode !== undefined &&
+      cleanMomoCode !== (vendor as any).momoCode
+    )
+      updatedFields.push('MoMo Code');
+    if (logoUrl !== undefined && logoUrl !== (vendor as any).logoUrl)
+      updatedFields.push('Logo');
     if (isActive !== undefined && isActive !== vendor.isActive)
       updatedFields.push('Store Status');
 
@@ -469,8 +498,10 @@ export class VendorsService {
         ...(description !== undefined && { description }),
         ...(address !== undefined && { address }),
         ...(phone !== undefined && { phone }),
+        ...(cleanMomoCode !== undefined && { momoCode: cleanMomoCode }),
+        ...(logoUrl !== undefined && { logoUrl }),
         ...(isActive !== undefined && { isActive }),
-      },
+      } as any,
       include: { user: true },
     });
 
@@ -746,7 +777,13 @@ export class VendorsService {
       });
     }
 
-    return settings;
+    return {
+      ...settings,
+      momoCode: (vendor as any).momoCode ?? null,
+      address: vendor.address ?? '',
+      description: vendor.description ?? '',
+      logoUrl: (vendor as any).logoUrl ?? '',
+    };
   }
 
   async updateSettings(userId: string, payload: any) {
@@ -757,10 +794,36 @@ export class VendorsService {
       );
     }
 
-    const cleanPhone = payload.phone?.trim() || null;
-    const cleanEmail = payload.supportEmail?.trim() || null;
-    const cleanStoreName = payload.storeName?.trim() || null;
-    const cleanOwnerName = payload.ownerName?.trim() || null;
+    const cleanPhone =
+      payload.phone !== undefined ? payload.phone?.trim() || null : undefined;
+    const cleanEmail =
+      payload.supportEmail !== undefined
+        ? payload.supportEmail?.trim() || null
+        : undefined;
+    const cleanStoreName =
+      payload.storeName !== undefined
+        ? payload.storeName?.trim() || null
+        : undefined;
+    const cleanOwnerName =
+      payload.ownerName !== undefined
+        ? payload.ownerName?.trim() || null
+        : undefined;
+    const cleanAddress =
+      payload.address !== undefined
+        ? payload.address?.trim() || null
+        : undefined;
+    const cleanDescription =
+      payload.description !== undefined
+        ? payload.description?.trim() || null
+        : undefined;
+    const cleanLogoUrl =
+      payload.logoUrl !== undefined
+        ? payload.logoUrl?.trim() || null
+        : undefined;
+    const cleanMomoCode =
+      payload.momoCode !== undefined
+        ? String(payload.momoCode || '').trim() || null
+        : undefined;
 
     let canUpdateStoreName = false;
     if (cleanStoreName) {
@@ -800,57 +863,82 @@ export class VendorsService {
       canUpdateUserEmail = !emailOwner;
     }
 
-    const updatedSettings = await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: vendor.userId },
-        data: {
-          ...(cleanOwnerName && { name: cleanOwnerName }),
-          ...(canUpdateUserEmail && cleanEmail && { email: cleanEmail }),
-          ...(canUpdateUserPhone && cleanPhone && { phone: cleanPhone }),
-        },
-      });
+    const { updatedVendor, updatedSettings } = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.user.update({
+          where: { id: vendor.userId },
+          data: {
+            ...(cleanOwnerName && { name: cleanOwnerName }),
+            ...(canUpdateUserEmail && cleanEmail && { email: cleanEmail }),
+            ...(canUpdateUserPhone && cleanPhone && { phone: cleanPhone }),
+          },
+        });
 
-      await tx.vendor.update({
-        where: { id: vendor.id },
-        data: {
-          ...(canUpdateStoreName &&
-            cleanStoreName && { storeName: cleanStoreName }),
-          ...(cleanPhone && { phone: cleanPhone }),
-        },
-      });
+        const savedVendor = await tx.vendor.update({
+          where: { id: vendor.id },
+          data: {
+            ...(canUpdateStoreName &&
+              cleanStoreName && { storeName: cleanStoreName }),
+            ...(cleanPhone !== undefined && { phone: cleanPhone }),
+            ...(cleanAddress !== undefined && { address: cleanAddress }),
+            ...(cleanDescription !== undefined && {
+              description: cleanDescription,
+            }),
+            ...(cleanLogoUrl !== undefined && { logoUrl: cleanLogoUrl }),
+            ...(cleanMomoCode !== undefined && { momoCode: cleanMomoCode }),
+          } as any,
+          include: { user: true },
+        });
 
-      return await tx.vendorSettings.upsert({
-        where: { vendorId: vendor.id },
-        update: {
-          storeName:
-            canUpdateStoreName && cleanStoreName
-              ? cleanStoreName
-              : vendor.storeName,
-          ownerName: cleanOwnerName ?? vendor.user?.name ?? '',
-          supportEmail: cleanEmail ?? vendor.user?.email ?? '',
-          phone: cleanPhone ?? vendor.phone ?? '',
-          momoNumber: payload.momoNumber?.trim() || cleanPhone || '',
-          theme: payload.theme || 'dark',
-          autoAcceptOrders: Boolean(payload.autoAcceptOrders ?? true),
-          emailAlerts: Boolean(payload.emailAlerts ?? true),
-        },
-        create: {
-          vendorId: vendor.id,
-          storeName:
-            canUpdateStoreName && cleanStoreName
-              ? cleanStoreName
-              : vendor.storeName || 'Ingeni Store',
-          ownerName:
-            cleanOwnerName || vendor.user?.name || 'Ingeni Store Representative',
-          supportEmail: cleanEmail || vendor.user?.email || 'support@ingenistore.rw',
-          phone: cleanPhone || vendor.phone || '+250728680460',
-          momoNumber: payload.momoNumber?.trim() || cleanPhone || '+250728680460',
-          theme: payload.theme || 'dark',
-          autoAcceptOrders: Boolean(payload.autoAcceptOrders ?? true),
-          emailAlerts: Boolean(payload.emailAlerts ?? true),
-        },
-      });
-    });
+        const savedSettings = await tx.vendorSettings.upsert({
+          where: { vendorId: vendor.id },
+          update: {
+            storeName:
+              canUpdateStoreName && cleanStoreName
+                ? cleanStoreName
+                : savedVendor.storeName,
+            ownerName: cleanOwnerName ?? vendor.user?.name ?? '',
+            supportEmail: cleanEmail ?? vendor.user?.email ?? '',
+            phone:
+              cleanPhone !== undefined
+                ? (cleanPhone ?? '')
+                : (savedVendor.phone ?? ''),
+            momoNumber:
+              payload.momoNumber?.trim() ||
+              (cleanPhone !== undefined ? (cleanPhone ?? '') : (savedVendor.phone ?? '')),
+            theme: payload.theme || 'dark',
+            autoAcceptOrders: Boolean(payload.autoAcceptOrders ?? true),
+            emailAlerts: Boolean(payload.emailAlerts ?? true),
+          },
+          create: {
+            vendorId: vendor.id,
+            storeName:
+              canUpdateStoreName && cleanStoreName
+                ? cleanStoreName
+                : savedVendor.storeName || 'Ingeni Store',
+            ownerName:
+              cleanOwnerName ||
+              vendor.user?.name ||
+              'Ingeni Store Representative',
+            supportEmail:
+              cleanEmail || vendor.user?.email || 'support@ingenistore.rw',
+            phone: cleanPhone || savedVendor.phone || '+250728680460',
+            momoNumber:
+              payload.momoNumber?.trim() ||
+              cleanPhone ||
+              savedVendor.phone ||
+              '+250728680460',
+            theme: payload.theme || 'dark',
+            autoAcceptOrders: Boolean(payload.autoAcceptOrders ?? true),
+            emailAlerts: Boolean(payload.emailAlerts ?? true),
+          },
+        });
+
+        return { updatedVendor: savedVendor, updatedSettings: savedSettings };
+      },
+    );
+
+    this.socketGateway.emitToAll('vendorUpdated', updatedVendor);
 
     const notifyTarget = cleanEmail || vendor.user?.email;
     const emailNotification = await this.safeSendEmail(
@@ -863,6 +951,10 @@ export class VendorsService {
 
     return {
       ...updatedSettings,
+      momoCode: (updatedVendor as any).momoCode ?? null,
+      address: updatedVendor.address ?? '',
+      description: updatedVendor.description ?? '',
+      logoUrl: (updatedVendor as any).logoUrl ?? '',
       emailNotification,
     };
   }
@@ -927,6 +1019,19 @@ export class VendorsService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  async findPublicDirectory() {
+  const vendors = await this.findAll();
+  return (Array.isArray(vendors) ? vendors : []).map((v: any) => ({
+    id: v.id,
+    storeName: v.storeName,
+    phone: v.phone ?? null,
+    momoCode: v.momoCode ?? v.momo_code ?? null,
+    momoAccountName: v.momoAccountName ?? v.accountName ?? null,
+    address: v.address ?? v.location ?? null,
+    isActive: v.isActive ?? true,
+  }));
+}
 
   async getStorefrontMetrics() {
     const [revenueAgg, activeOrdersCount, productCount] = await Promise.all([

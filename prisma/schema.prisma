@@ -75,10 +75,11 @@ model Vendor {
   userId    String  @unique
   isActive  Boolean @default(true)
 
-  // Store transparency details
+  // Store transparency & MoMo details
   description   String?
   address       String?
   phone         String?
+  momoCode      String?
   logoUrl       String?
   settings      VendorSettings?
   adminRequests AdminRequest[]
@@ -96,12 +97,17 @@ model Vendor {
 ////////////////////////////////////////////////////
 
 model Category {
-  id    String @id @default(cuid())
-  name  String @unique
-  image String
+  id       String  @id @default(cuid())
+  name     String  @unique
+  slug     String? @unique
+  image    String
+  parentId String?
 
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryHierarchy")
   products Product[]
 
+  @@index([parentId])
   @@map("category")
 }
 
@@ -186,6 +192,8 @@ model TrafficClick {
   vendorId   String?
   createdAt  DateTime @default(now())
 
+  @@index([vendorId])
+  @@index([productId])
   @@map("traffic_click")
 }
 

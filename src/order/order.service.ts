@@ -83,7 +83,7 @@ export class OrderService {
       }
 
       const priceAtPurchase = Number(product.price);
-      const quantity = item.quantity || 1;
+      const quantity = Number(item.quantity) || 1;
       const lineTotal = priceAtPurchase * quantity;
 
       const commissionRate = 0.08; // 8% platform take
@@ -96,7 +96,7 @@ export class OrderService {
 
       return {
         productId: product.id,
-        vendorId: vendorId,
+        vendorId,
         quantity,
         priceAtPurchase,
         commissionRate,
@@ -115,14 +115,24 @@ export class OrderService {
       }),
     );
 
-    const totalAmount = dto.totalAmount
-      ? Number(dto.totalAmount)
-      : orderItemsData.reduce(
-          (acc, i) => acc + Number(i.priceAtPurchase) * i.quantity,
-          0,
-        );
+    const totalAmount =
+      dto.totalAmount !== undefined && dto.totalAmount !== null
+        ? Number(dto.totalAmount)
+        : orderItemsData.reduce(
+            (acc, i) => acc + Number(i.priceAtPurchase) * i.quantity,
+            0,
+          );
     const taxAmount = dto.taxAmount ? Number(dto.taxAmount) : 0;
     const shippingFees = dto.shippingFees ? Number(dto.shippingFees) : 0;
+
+    const cleanProofUrl =
+      typeof dto.paymentProofUrl === 'string' && dto.paymentProofUrl.trim().length > 0
+        ? dto.paymentProofUrl.trim()
+        : null;
+
+    const initialPaymentStatus = cleanProofUrl
+      ? PaymentStatus.PENDING
+      : PaymentStatus.INITIALIZED;
 
     const createdOrder = await this.prisma.$transaction(async (tx) => {
       return await tx.order.create({
@@ -137,7 +147,7 @@ export class OrderService {
           taxAmount,
           shippingFees,
           status: OrderStatus.PENDING,
-          paymentStatus: PaymentStatus.INITIALIZED,
+          paymentStatus: initialPaymentStatus,
           items: {
             create: orderItemsData,
           },
@@ -149,9 +159,9 @@ export class OrderService {
               userId,
               transactionRef,
               amount: totalAmount,
-              status: PaymentStatus.INITIALIZED,
+              status: initialPaymentStatus,
               provider: dto.provider || dto.paymentMethod || 'MOBILE_MONEY',
-              paymentProofUrl: dto.paymentProofUrl || null,
+              paymentProofUrl: cleanProofUrl,
             },
           },
         },
@@ -200,6 +210,11 @@ export class OrderService {
     proofUrl: string,
     transactionReference?: string,
   ) {
+    const cleanProofUrl = (proofUrl || '').trim();
+    if (!cleanProofUrl) {
+      throw new BadRequestException('A valid payment proof URL is required.');
+    }
+
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { payment: true, user: true },
@@ -227,7 +242,7 @@ export class OrderService {
           where: { id: order.payment.id },
           data: {
             status: PaymentStatus.PENDING,
-            paymentProofUrl: proofUrl,
+            paymentProofUrl: cleanProofUrl,
             transactionRef: transactionReference || order.payment.transactionRef,
           },
         });
@@ -265,7 +280,10 @@ export class OrderService {
   async getOrdersByUser(userId: string) {
     return this.prisma.order.findMany({
       where: { userId },
-      include: { items: { include: { product: true } } },
+      include: {
+        items: { include: { product: true } },
+        payment: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -282,7 +300,11 @@ export class OrderService {
   async getAllOrders(status?: string) {
     return this.prisma.order.findMany({
       where: status ? { status: status as OrderStatus } : undefined,
-      include: { items: { include: { product: true } }, user: true },
+      include: {
+        items: { include: { product: true } },
+        payment: true,
+        user: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -290,7 +312,11 @@ export class OrderService {
   async getOne(id: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },
-      include: { items: { include: { product: true } }, user: true },
+      include: {
+        items: { include: { product: true } },
+        payment: true,
+        user: true,
+      },
     });
 
     if (!order) {
@@ -302,17 +328,26 @@ export class OrderService {
   async updatePaymentStatus(id: string, paymentStatus: PaymentStatus) {
     const existingOrder = await this.prisma.order.findUnique({
       where: { id },
-      include: { user: true },
+      include: { user: true, payment: true },
     });
 
     if (!existingOrder) {
       throw new NotFoundException('Order record not found.');
     }
 
-    const updatedOrder = await this.prisma.order.update({
-      where: { id },
-      data: { paymentStatus },
-      include: { user: true, payment: true },
+    const updatedOrder = await this.prisma.$transaction(async (tx) => {
+      if (existingOrder.payment) {
+        await tx.payment.update({
+          where: { id: existingOrder.payment.id },
+          data: { status: paymentStatus },
+        });
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: { paymentStatus },
+        include: { user: true, payment: true },
+      });
     });
 
     const customerEmail = updatedOrder.email || updatedOrder.user?.email;
@@ -360,14 +395,14 @@ export class OrderService {
     });
 
     await this.prisma.orderItem.updateMany({
-      where: { orderId: orderId },
+      where: { orderId },
       data: { fulfillmentStatus: status },
     });
 
     await this.prisma.orderHistory.create({
       data: {
-        orderId: orderId,
-        status: status,
+        orderId,
+        status,
       },
     });
 
@@ -406,7 +441,9 @@ export class OrderService {
 
   async findAll() {
     return this.prisma.vendor.findMany({
-      include: { user: { select: { email: true, name: true, id: true, phone: true } } },
+      include: {
+        user: { select: { email: true, name: true, id: true, phone: true } },
+      },
     });
   }
 
@@ -432,6 +469,7 @@ export class OrderService {
     description?: string;
     address?: string;
     phone?: string;
+    momoCode?: string | null;
   }) {
     const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
     if (!user) {
@@ -454,6 +492,7 @@ export class OrderService {
         description: data.description,
         address: data.address,
         phone: data.phone,
+        ...(data.momoCode !== undefined && { momoCode: data.momoCode }),
         isActive: true,
       },
       include: { user: true },
@@ -554,6 +593,7 @@ export class OrderService {
     description: string;
     address: string;
     phone: string;
+    momoCode?: string;
   }) {
     return this.create(data);
   }
@@ -568,14 +608,15 @@ export class OrderService {
   }
 
   async update(id: string, data: any) {
-    const { storeName, description, address, phone, isActive } = data;
+    const { storeName, description, address, phone, momoCode, isActive } = data;
     return this.prisma.vendor.update({
       where: { id },
       data: {
-        storeName,
-        description,
-        address,
-        phone,
+        ...(storeName !== undefined && { storeName }),
+        ...(description !== undefined && { description }),
+        ...(address !== undefined && { address }),
+        ...(phone !== undefined && { phone }),
+        ...(momoCode !== undefined && { momoCode }),
         ...(isActive !== undefined && { isActive }),
       },
     });
@@ -794,6 +835,7 @@ export class OrderService {
             where: targetVendorId ? { vendorId: targetVendorId } : undefined,
             include: { product: true, vendor: true },
           },
+          payment: true,
         },
         orderBy: { createdAt: 'desc' },
       })
@@ -805,7 +847,7 @@ export class OrderService {
     if (!vendor) {
       vendor = await this.prisma.vendor.create({
         data: {
-          userId: userId,
+          userId,
           storeName: 'Ingeni Store',
           phone: '+250728680460',
           isActive: true,
@@ -848,14 +890,23 @@ export class OrderService {
     return this.prisma.vendorSettings.upsert({
       where: { vendorId: vendor.id },
       update: {
-        storeName: payload.storeName,
-        ownerName: payload.ownerName,
-        supportEmail: payload.supportEmail,
-        phone: payload.phone,
-        momoNumber: payload.momoNumber,
-        theme: payload.theme,
-        autoAcceptOrders: payload.autoAcceptOrders,
-        emailAlerts: payload.emailAlerts,
+        ...(payload.storeName !== undefined && { storeName: payload.storeName }),
+        ...(payload.ownerName !== undefined && { ownerName: payload.ownerName }),
+        ...(payload.supportEmail !== undefined && {
+          supportEmail: payload.supportEmail,
+        }),
+        ...(payload.phone !== undefined && { phone: payload.phone }),
+        ...(payload.momoNumber !== undefined && {
+          momoNumber: payload.momoNumber,
+        }),
+        ...(payload.momoCode !== undefined && { momoCode: payload.momoCode }),
+        ...(payload.theme !== undefined && { theme: payload.theme }),
+        ...(payload.autoAcceptOrders !== undefined && {
+          autoAcceptOrders: payload.autoAcceptOrders,
+        }),
+        ...(payload.emailAlerts !== undefined && {
+          emailAlerts: payload.emailAlerts,
+        }),
       },
       create: {
         vendorId: vendor.id,
@@ -864,6 +915,7 @@ export class OrderService {
         supportEmail: payload.supportEmail || 'support@ingenistore.rw',
         phone: payload.phone || '+250728680460',
         momoNumber: payload.momoNumber || '+250728680460',
+        ...(payload.momoCode !== undefined && { momoCode: payload.momoCode }),
         theme: payload.theme || 'dark',
         autoAcceptOrders: payload.autoAcceptOrders ?? true,
         emailAlerts: payload.emailAlerts ?? true,
@@ -919,7 +971,7 @@ export class OrderService {
     return {
       revenue: revenueAgg._sum.totalAmount || 0,
       activeOrders: activeOrdersCount,
-      productCount: productCount,
+      productCount,
     };
   }
 }

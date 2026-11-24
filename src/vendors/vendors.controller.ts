@@ -28,6 +28,11 @@ export class VendorsController {
     return user.id || user.sub;
   }
 
+@Get('directory')
+async getPublicVendorDirectory() {
+  return this.vendorsService.findPublicDirectory();
+}
+
   // =========================================================================
   // 1. STATIC ROUTES (MUST COME BEFORE ALL :id DYNAMIC ROUTES)
   // =========================================================================
