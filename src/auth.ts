@@ -42,10 +42,24 @@ export const getAuthConfiguration = (
     (isProd ? "https://ingeni.onrender.com" : "http://localhost:5173")
   ).replace(/\/+$/, "");
 
-  const authBaseUrl = (
-    process.env.BETTER_AUTH_URL ||
-    (isProd ? `${frontendBase}/api` : "http://localhost:8000")
-  ).replace(/\/+$/, "");
+  const defaultApiBase = isProd
+    ? "https://ingeri-api.onrender.com/api"
+    : "http://localhost:8000";
+
+  const authBaseUrl = (process.env.BETTER_AUTH_URL || defaultApiBase).replace(
+    /\/+$/,
+    "",
+  );
+
+  // Use SameSite=None + Secure when serving over HTTPS (production),
+  // and SameSite=Lax + Secure=false for local HTTP testing on PC/Android.
+  const useCrossSiteHttpsCookies =
+    isProd || authBaseUrl.startsWith("https://");
+
+  const extraOrigins = (process.env.TRUSTED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
   return betterAuth({
     database: prismaAdapter(prisma, {
@@ -55,11 +69,15 @@ export const getAuthConfiguration = (
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: authBaseUrl,
 
-    trustedOrigins: [
-      "http://localhost:3000",
-      "http://localhost:5173",
-      frontendBase,
-    ].filter(Boolean),
+    trustedOrigins: Array.from(
+      new Set([
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        frontendBase,
+        ...extraOrigins,
+      ]),
+    ),
 
     user: {
       additionalFields: {
@@ -111,11 +129,11 @@ export const getAuthConfiguration = (
     advanced: {
       disableOriginCheck: true,
       disableCSRFCheck: true,
-      cookieSecure: isProd,
-      useSecureCookies: isProd,
+      cookieSecure: useCrossSiteHttpsCookies,
+      useSecureCookies: useCrossSiteHttpsCookies,
       defaultCookieAttributes: {
-        sameSite: "lax",
-        secure: isProd,
+        sameSite: useCrossSiteHttpsCookies ? "none" : "lax",
+        secure: useCrossSiteHttpsCookies,
         httpOnly: true,
         path: "/",
       },
